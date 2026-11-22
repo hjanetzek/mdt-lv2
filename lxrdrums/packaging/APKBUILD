@@ -1,0 +1,38 @@
+# Contributor: Hannes Janetzek <hannes.janetzek@gmail.com>
+# DRAFT for nura-builds aports/lv2/edrumsynth-lv2/APKBUILD (not there yet).
+# eDrumSynth: MicroDexed-touch's drum engine (the voices of the OpenElixir-02
+# firmware) as an LV2 instrument; Zynthian engine key "JV/eDrumSynth".
+# Source: a local tarball from lv2/lxrdrums/tools/mktarball.sh, copied next
+# to this file, until lv2/ is published; then a download of its archive at a
+# commit (_commit, as artyfx-lv2). No ARM flags here: they come from the build.
+pkgname=edrumsynth-lv2
+pkgver=0.0.1
+pkgrel=0
+pkgdesc="eDrumSynth: synthesized drums (MicroDexed-touch's drum engine) as an LV2 instrument"
+url="https://codeberg.org/hjanetzek/cynthian"
+arch="all"
+license="GPL-3.0-only"
+makedepends="cmake samurai lv2-dev"
+source="edrumsynth-$pkgver.tar.gz"
+builddir="$srcdir/edrumsynth-$pkgver"
+
+build() {
+	cmake -B build -G Ninja \
+		-DCMAKE_BUILD_TYPE=None \
+		-DCMAKE_INSTALL_PREFIX=/usr
+	cmake --build build
+}
+
+check() {
+	# the generator, render and resampler tests; the TTL validators
+	# (lv2lint, sord_validate, lv2_validate) run only where installed
+	ctest --test-dir build --output-on-failure
+}
+
+package() {
+	DESTDIR="$pkgdir" cmake --install build
+}
+# from tools/mktarball.sh (or abuild checksum)
+sha512sums="
+00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000  edrumsynth-0.0.1.tar.gz
+"

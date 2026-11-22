@@ -8,7 +8,7 @@ Cortex-A7). Zynthian shows its controls in pages and its envelope and filter
 widgets for them. This is the first MDT synth as LV2; the others follow the
 same pattern (§10).
 
-Status: plan (2026-11-22). Implementation: §9.
+Status: steps 1-4 implemented (2026-11-22; notes: §11). Implementation: §9.
 
 ## 1. Facts this plan rests on
 
@@ -283,3 +283,50 @@ reported. Everything under `lv2/` builds without anything outside it.
   MultiSample, Trio / Analog, granular) the same way, copied into `lv2/`:
   their engines need separating from the Teensy Audio objects in the copy,
   one plan each.
+
+## 11. Implementation notes (steps 1-4, 2026-11-22)
+
+Where the implementation differs from or settles the plan:
+
+- File names follow the plugin's name: `src/edrumsynth.c` (not
+  `src/lxrdrums.c`), `edrumsynth.lv2/edrumsynth.ttl`.
+- `lv2:displayPriority` is written in the lv2core namespace, as Zynthian
+  reads it (`world.ns.lv2.displayPriority`); the spec's property is
+  `port-props:displayPriority`. The validators get it declared by
+  `tests/zynthian-schema.ttl` (not installed): the documented waiver.
+- Port symbols and names come from a naming table in `gen_ttl.c` (by group,
+  the engine's category and long name), not from the engine's 8-character
+  display names ("Frequncy", "Resnance"); unknown parameters stop the
+  generator. Duplicates in a group are numbered (`cy_modosc_wave1/2`).
+- Group names: "<Voice> Mix / Osc / Amp EG / Filter / Transient / FM or
+  Mod Osc / Mod / LFO" (sub page 7 is "Mix", sub page 2 "Mod"); the snare
+  has no FM group (its sub page 3 is empty). Groups also carry
+  `param:EnvelopeControls` / `FilterControls` / `OscillatorControls`.
+- Non-widget number ports are `lv2:integer` (integer steps in Zynthian and
+  for MIDI learn); widget ports stay plain floats.
+- FX bus: all its parameters as static ports (11; the reverb type, a single
+  value, is left out); P1-P4 are "FX Param 1-4" with an `rdfs:comment` for
+  their meaning per FX type. Master: DJ filter, DJ resonance, limiter.
+  `PAR_VOICE_DECIMATION_ALL` (114) is not exposed (it is on no page; it
+  stays a modulation target, "All Sample Rate").
+- Modulation destination labels: "<voice> <group> <name>" from the ports
+  ("BD Osc Coarse"), not the engine's "1 coa".
+- The plugin runs the engine in `LXR_SPLIT_KIT` mode: the kit's audio
+  outputs (St1, St2, L1/R1, L2/R2, FX) count; both mixes are summed to the
+  one stereo output.
+- Event timing: triggers start at the next engine block not yet rendered
+  (the engine renders when the output needs frames, so at 44.1 kHz that is
+  block ceil(frame / 64); with the resampler up to its 24-frame lookahead
+  later). Control ports are read at the start of `run()`.
+- Resampler: 48 taps per phase, Kaiser beta 9; exact polyphase up to 1024
+  phases, else 256 interpolated phases; measured rest (aliasing, images,
+  noise) about -100 dB at 1 kHz, gain flat to 0.0001 dB up to 16 kHz.
+- The render test runs each render in a forked child (the engine is global;
+  a fresh process starts it the same way), so no engine change was needed.
+  The engine copy is unchanged (`engine/Synth_LXR/ORIGIN.md`).
+- The engine itself calls `fmaf` per sample in its filters, `sqrtf` per
+  sample in some pan paths (depending on its config), and `powf` / `tanf` /
+  `expf` when parameters change or voices trigger. With `-mfpu=neon-vfpv4`
+  GCC inlines `fmaf` (VFPv4 has FMA) and `sqrtf` (VSQRT); on x86_64 without
+  `-mfma` `fmaf` is a libm call. To check in the armv7 build's disassembly
+  and on the device (steps 5, 6).
