@@ -7,7 +7,7 @@ ARM devices (target: postmarketOS / nura armv7, Cortex-A7). Plain LV2 in C,
 no GUI: Zynthian shows the controls in pages, with its envelope and filter
 widgets on the amp EG and filter pages; desktop hosts show their generic UIs.
 
-- URI `https://codeberg.org/hjanetzek/cynthian/lv2/edrumsynth`, bundle
+- URI `https://github.com/hjanetzek/mdt-lv2/edrumsynth`, bundle
   `edrumsynth.lv2`, binary `edrumsynth.so`, `doap:name` "eDrumSynth" (the
   Zynthian engine key `JV/eDrumSynth`). GPL-3.0-only (the engine's licence
   and NOTICE: `engine/Synth_LXR/LICENSE`, `NOTICE.md`). "LXR" is an Erica

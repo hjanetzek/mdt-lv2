@@ -152,7 +152,7 @@ session):
 11. **Identity** (name decided 2026-11-22): `doap:name` **"eDrumSynth"**
     (the Zynthian engine key `JV/eDrumSynth`: don't change it), symbol
     `edrumsynth`: bundle `edrumsynth.lv2`, binary `edrumsynth.so`, URI
-    `https://codeberg.org/hjanetzek/cynthian/lv2/edrumsynth`, package
+    `https://github.com/hjanetzek/mdt-lv2/edrumsynth`, package
     `edrumsynth-lv2`; GPL-3.0-only (the engine's licence, with its NOTICE;
     no "LXR" in names, it is an Erica Synths trademark). The source
     directory stays `lv2/lxrdrums` for now.

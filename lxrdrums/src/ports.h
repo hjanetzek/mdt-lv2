@@ -4,7 +4,7 @@
 
 #include <stdint.h>
 
-#define EDS_URI			"https://codeberg.org/hjanetzek/cynthian/lv2/edrumsynth"
+#define EDS_URI			"https://github.com/hjanetzek/mdt-lv2/edrumsynth"
 #define EDS_PORT_MIDI_IN	0
 #define EDS_PORT_OUT_L		1
 #define EDS_PORT_OUT_R		2

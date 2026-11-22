@@ -128,7 +128,7 @@ if (EDS_TESTS AND NOT CMAKE_CROSSCOMPILING)
 	endif ()
 	if (LV2LINT)
 		# warnings are errors (notes are not: no units, comments); online tests off
-		add_test (NAME lv2lint COMMAND ${LV2LINT} -Mpack -Ewarn -I ${BUNDLE_DIR}/ "https://codeberg.org/hjanetzek/cynthian/lv2/edrumsynth")
+		add_test (NAME lv2lint COMMAND ${LV2LINT} -Mpack -Ewarn -I ${BUNDLE_DIR}/ "https://github.com/hjanetzek/mdt-lv2/edrumsynth")
 		set_tests_properties (lv2lint PROPERTIES FAIL_REGULAR_EXPRESSION "\\[FAIL\\]|\\[WARN\\]")
 	endif ()
 

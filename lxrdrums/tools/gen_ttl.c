@@ -30,7 +30,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-#define URI		"https://codeberg.org/hjanetzek/cynthian/lv2/edrumsynth"
+#define URI		"https://github.com/hjanetzek/mdt-lv2/edrumsynth"
 #define NAME		"eDrumSynth"
 #define BINARY		"edrumsynth.so"
 #define TTL		"edrumsynth.ttl"
@@ -559,9 +559,9 @@ static void writePlugin (FILE *f)
 		 "\tdoap:maintainer [\n"
 		 "\t\tfoaf:name \"Hannes Janetzek\" ;\n"
 		 "\t\tfoaf:mbox <mailto:hannes.janetzek@gmail.com> ;\n"
-		 "\t\tfoaf:homepage <https://codeberg.org/hjanetzek/cynthian>\n"
+		 "\t\tfoaf:homepage <https://github.com/hjanetzek/mdt-lv2>\n"
 		 "\t] ;\n"
-		 "\tdoap:homepage <https://codeberg.org/hjanetzek/cynthian> ;\n"
+		 "\tdoap:homepage <https://github.com/hjanetzek/mdt-lv2> ;\n"
 		 "\tdoap:shortdesc \"Synthesized drums\" ;\n"
 		 "\tlv2:minorVersion %d ;\n"
 		 "\tlv2:microVersion %d ;\n"
