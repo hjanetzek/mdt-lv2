@@ -66,12 +66,12 @@ Status: plan (2026-11-22). Implementation: §9.
 
 **nura** (nura-builds, branch `main`; answers from the device-testing
 session):
-- Recipe `aports/lv2/lxrdrums-lv2/APKBUILD`, CMake like `artyfx-lv2`,
+- Recipe `aports/lv2/edrumsynth-lv2/APKBUILD`, CMake like `artyfx-lv2`,
   `arch="all"`, installs `/usr/lib/lv2/<bundle>.lv2`; listed in
   `sets/plugins.sh` `PACKAGES_armv7`.
 - Built by pmbootstrap in its armv7 chroot inside the x86_64 builder VM
   (`localhost:2240`, user `user`; `tools/s3ve3g-builder.sh build --arch
-  armv7 lxrdrums-lv2`, `... fetch`). The VM and the phone are shared with
+  armv7 edrumsynth-lv2`, `... fetch`). The VM and the phone are shared with
   the device-testing session: coordinate.
 - Flags come from the build (`-mfpu=neon-vfpv4 -mtune=cortex-a7`, and for
   the plugins set `-O3 -funsafe-math-optimizations`); the recipe and the
@@ -149,13 +149,13 @@ session):
 10. **One instance per process**: a second `instantiate()` in the same
     process fails (returns NULL, logs why). jalv / Zynthian run one per
     process.
-11. **Identity**: bundle `lxrdrums.lv2`, binary `lxrdrums.so`, URI
-    `https://codeberg.org/hjanetzek/cynthian/lv2/lxrdrums`, GPL-3.0-only
-    (the engine's licence, with its NOTICE). `doap:name` is the Zynthian
-    engine key and visible: **to be decided by the user** before the first
-    package (default until then: "MDT LXR Drums"; "LXR" is an Erica Synths
-    trademark, see the engine's NOTICE.md, which may argue for a name
-    without it).
+11. **Identity** (name decided 2026-11-22): `doap:name` **"eDrumSynth"**
+    (the Zynthian engine key `JV/eDrumSynth`: don't change it), symbol
+    `edrumsynth`: bundle `edrumsynth.lv2`, binary `edrumsynth.so`, URI
+    `https://codeberg.org/hjanetzek/cynthian/lv2/edrumsynth`, package
+    `edrumsynth-lv2`; GPL-3.0-only (the engine's licence, with its NOTICE;
+    no "LXR" in names, it is an Erica Synths trademark). The source
+    directory stays `lv2/lxrdrums` for now.
 12. **Packaging source**: one archive. Until `lv2/` has its own repository,
     a local tarball (`tools/mktarball.sh`) for builds in the builder VM;
     then the recipe downloads that repository's archive at a commit. Where
@@ -177,7 +177,7 @@ lv2/lxrdrums/
   engine/Synth_LXR/  copy of MDT's third-party/Synth_LXR (ORIGIN.md: commit, changes)
   tools/gen_ttl.c    writes lxrdrums.ttl and manifest.ttl from the engine tables
   tools/mktarball.sh source tarball for the recipe
-  lxrdrums.lv2/      manifest.ttl, lxrdrums.ttl (generated, committed)
+  edrumsynth.lv2/    manifest.ttl, edrumsynth.ttl (generated, committed)
   tests/             render test host, TTL check, resampler test
 ```
 
@@ -241,7 +241,7 @@ pages and widgets on screen.
 ## 7. Packaging
 
 - `nura-builds` (a worktree on a new branch from `main`, not pushed without
-  the user's OK): `aports/lv2/lxrdrums-lv2/APKBUILD` (one archive source,
+  the user's OK): `aports/lv2/edrumsynth-lv2/APKBUILD` (one archive source,
   `cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=None -DCMAKE_INSTALL_PREFIX=/usr`,
   `options="!check"` or ctest without the lint tools), and
   `sets/plugins.sh` `PACKAGES_armv7`.
@@ -261,7 +261,7 @@ pages and widgets on screen.
    commit on the nura-builds branch.
 6. Phone: install, benchmark, Zynthian pages and widgets (coordinated with
    device-testing and the user).
-7. Name decided (§2.11), `lv2/` published (§2.12): final recipe,
+7. `lv2/` published (§2.12): final recipe,
    engine_config entry, push with the user's OK.
 
 ## 9. Implementation
