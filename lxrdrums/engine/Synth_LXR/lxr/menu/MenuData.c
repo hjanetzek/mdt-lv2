@@ -1,0 +1,820 @@
+/*
+ * Copyright (C) 2012-2026 Erica Synths
+ * SPDX-License-Identifier: GPL-3.0-only
+ *
+ * This file is part of the LXR firmware. It is licensed under the GNU General
+ * Public License version 3, with the additional permission and terms in
+ * NOTICE.md. See LICENSE and NOTICE.md in the root of the repository.
+ *
+ * MDT: the parameter tables of menu.c (names, data types), the voice pages
+ * of slots with a non-stock engine (menu_updateVoicePages(), menu_getPage(),
+ * menu_paramDtype(), menu_isTuningParam()) and the menu item names
+ * (getMaxEntriesForMenu(), getMenuItemNameForValue(), numtostru(),
+ * numtostrpu_2Bytes()); the
+ * display, encoder, load/save and front panel parts of menu.c are not
+ * ported.
+ */
+#include "menu/menu.h"
+#include "menu/MenuText.h"
+#include "menu/menuPages.h"
+#include "Preset/KitEngines.h"
+#include <string.h>
+
+uint8_t menu_numSamples = 0;
+
+/** array holding all the names for the parameters
+ *  short name, category, long name
+ * These correspond with NamesEnum in menu.h
+ * */
+PROGMEM const Name valueNames[NUM_NAMES] =
+{
+		{SHORT_EMPTY,CAT_EMPTY,LONG_EMPTY},					//empty						//0
+		{SHORT_COARSE,CAT_OSC,LONG_COARSE},					//coarse tune
+		{SHORT_FINE,CAT_OSC,LONG_FINE},						//fine tune
+		{SHORT_ATTACK,CAT_VELO_EG,LONG_ATTACK},				//attack velocity
+		{SHORT_DECAY,CAT_VELO_EG,LONG_DECAY},				//decay velocity
+		{SHORT_DECAY,CAT_PITCH_EG,LONG_DECAY},				//pitch decay
+		{SHORT_MOD,CAT_PITCH_MOD,LONG_AMOUNT},				//mod amount
+		{SHORT_AMNT,CAT_FM,LONG_AMOUNT},					//fm amount
+		{SHORT_FREQ,CAT_FM,LONG_FREQ},						//fm frequency
+		{SHORT_DRIVE, CAT_VOICE,LONG_DRIVE},				//drive
+		{SHORT_VOL,CAT_VOICE,LONG_VOL},						//volume					//10
+		{SHORT_PAN,CAT_VOICE,LONG_PAN},						//pan
+		{SHORT_NOISE,CAT_NOISE,LONG_FREQ},					//noise frequency
+		{SHORT_MIX,CAT_NOISE_OSC,LONG_MIX},					//mix
+		{SHORT_REPEAT,CAT_VELO_EG,LONG_REPEAT_CNT},			//repeat
+		{SHORT_FREQ,CAT_FILTER,LONG_FREQ},					//filter freq
+		{SHORT_FIL_RESO,CAT_FILTER,LONG_RESONANCE},			//filter reso
+		{SHORT_TYPE,CAT_FILTER,LONG_TYPE},				//filter type
+		{SHORT_MOD_OSC1_FREQ,CAT_MOD_OSC,LONG_FREQ1},		//mod osc 1 freq
+		{SHORT_MOD_OSC2_FREQ,CAT_MOD_OSC,LONG_FREQ2},		//mod osc 2 freq
+		{SHORT_MOD_OSC1_GAIN,CAT_MOD_OSC,LONG_GAIN1},		//mod osc 1 gain			//20
+		{SHORT_MOD_OSC2_GAIN,CAT_MOD_OSC,LONG_GAIN2},		//mod osc 2 gain
+
+		{SHORT_FREQ,CAT_LFO,LONG_FREQ},						//freq lfo
+		{SHORT_MOD,CAT_LFO,LONG_AMOUNT},					//mod lfo
+		{SHORT_WAVE,CAT_LFO,LONG_WAVE},						//wave lfo
+		{SHORT_DEST,CAT_LFO,LONG_DEST_PARAM},				//destination lfo (destination)
+
+		{SHORT_SYNC,CAT_LFO,LONG_CLOCKSYNC},				//TEXT_SYNC_LFO,
+		{SHORT_RETRIGGER,CAT_LFO,LONG_RETRIGGER},			//TEXT_RETRIGGER_LFO,
+		{SHORT_OFFSET,CAT_LFO,LONG_OFFSET},					//TEXT_OFFSET_LFO,
+		{SHORT_VOICE,CAT_LFO,LONG_DEST_VOICE},				//TEXT_TARGET_VOICE_LFO,
+
+		{SHORT_SLOPE,CAT_VELO_EG,LONG_SLOPE},				//TEXT_EG_SLOPE,			//30
+
+		{SHORT_DECAY1,CAT_VELO_EG,LONG_DECAY_CLOSED},		//TEXT_DECAY_CLOSED,
+		{SHORT_DECAY2,CAT_VELO_EG,LONG_DECAY_OPEN},			//TEXT_DECAY_OPEN,
+
+		{SHORT_WAVE,CAT_OSC,LONG_WAVE},						//TEXT_WAVEFORM
+
+		{SHORT_WAVE,CAT_TRANS,LONG_WAVE},					//TEXT_TRANSIENT_WAVE
+		{SHORT_VOL,CAT_TRANS,LONG_VOL},						//TEXT_TRANSIENT_VOLUME
+		{SHORT_FREQ,CAT_TRANS,LONG_FREQ},					//TEXT_TRANSIENT_FREQ
+
+
+		{SHORT_EQ_GAIN,CAT_EQ,LONG_GAIN},					//TEXT_EQ_GAIN
+		{SHORT_EQ_FREQ,CAT_EQ,LONG_FREQ},					//TEXT_EQ_FREQ
+
+#if USE_CODEC_EQ
+
+		{SHORT_EQ,CAT_EQ,LONG_ENABLE},						//TEXT_CODEC_EQ_ENABLE
+		{SHORT_MOD_OSC1_FREQ,CAT_EQ,LONG_FREQ},				//TEXT_CODEC_EQ_FB
+		{SHORT_MOD_OSC2_FREQ,CAT_EQ,LONG_FREQ},				//TEXT_CODEC_EQ_FT
+		{SHORT_MOD_OSC1_GAIN,CAT_EQ,LONG_GAIN},				//TEXT_CODEC_EQ_GB
+		{SHORT_MOD_OSC2_GAIN,CAT_EQ,LONG_GAIN},				//TEXT_CODEC_EQ_GT
+
+		{SHORT_LIMITER,CAT_LIMIT,LONG_ENABLE},				//TEXT_CODEC_LIMIT_ENABLE
+		{SHORT_ATTACK,CAT_LIMIT,LONG_ATTACK},				//TEXT_CODEC_LIMIT_ATTACK
+		{SHORT_RELEASE,CAT_LIMIT,LONG_RELEASE},				//TEXT_CODEC_LIMIT_RELEASE
+		{SHORT_MAX,CAT_LIMIT,LONG_THRESH_MAX},				//TEXT_CODEC_LIMIT_MAX
+		{SHORT_MIN,CAT_LIMIT,LONG_THRESH_MIN},				//TEXT_CODEC_LIMIT_MIN
+
+#endif
+
+		{SHORT_ROLL,CAT_PATTERN,LONG_ROLLRATE},				//TEXT_ROLL_SPEED
+		{SHORT_MORPH,CAT_SOUND,LONG_MORPH},					//TEXT_X_FADE					//40
+
+
+		{SHORT_VELOCITY,CAT_STEP,LONG_VELOCITY},			//TEXT_STEP_VELOCITY
+		{SHORT_NOTE,CAT_STEP,LONG_NOTE},					//TEXT_NOTE
+		{SHORT_PROBABILITY,CAT_STEP,LONG_PROBABILITY},		//TEXT_PROBABILITY,
+		{SHORT_STEP,CAT_STEP,LONG_NUMBER},					//TEXT_ACTIVE_STEP
+
+		{SHORT_LENGTH,CAT_PATTERN,LONG_LENGTH},				//TEXT_PAT_LENGTH,
+		{SHORT_STEP,CAT_EUKLID,LONG_STEPS},					//TEXT_NUM_STEPS,
+		{SHORT_ROTATION, CAT_EUKLID, LONG_ROTATION}, 		//TEXT_ROTATION
+		{SHORT_FLAM, CAT_STEP, LONG_FLAM}, 		//TEXT_FLAM
+		{SHORT_SHIFT, CAT_STEP, LONG_SHIFT}, 		//TEXT_SHIFT
+
+
+		{SHORT_BPM,CAT_GLOBAL,LONG_TEMPO},					//TEXT_BPM
+
+		{SHORT_CHANNEL,CAT_VOICE,LONG_MIDI_CHANNEL},		//TEXT_MIDI_CHANNEL
+		{SHORT_OUT,CAT_VOICE,LONG_AUDIO_OUT},				//TEXT_AUDIO_OUT				//50
+
+		{SHORT_SR,CAT_VOICE,LONG_SAMPLE_RATE},				//TEXT_SAMPLE_RATE
+
+		{SHORT_REPEAT,CAT_PATTERN,LONG_REPEAT_CNT},				//TEXT_PATTERN_REPEAT
+		{SHORT_NXT,CAT_PATTERN,LONG_NEXT_PAT},				//TEXT_PATTERN_NEXT
+
+		//	{SHORT_PHASE,CAT_OSC,LONG_PHASE},				//TEXT_OSC_PHASE
+		{SHORT_MODE,CAT_OSC,LONG_MODE},				//TEXT_MODE mix or mod for fm osc
+		{SHORT_VOL,CAT_OSC,LONG_VOL},				//TEXT_OSC_VOLUME fm oscillator volume in mix mode
+		{SHORT_DRIVE, CAT_FILTER,LONG_DRIVE},			//TEXT_FILTER_DRIVE
+
+		{SHORT_DEST,	CAT_VELOCITY,	LONG_DEST_PARAM},		//TEXT_VEL_DEST,
+		{SHORT_AMNT,	CAT_VELOCITY,	LONG_AMOUNT},			//TEXT_VEL_AMT,
+		{SHORT_VOL,CAT_VELOCITY,	LONG_VOLUME_MOD},		//TEXT_VEL_MOD_VOL,
+
+		{SHORT_FETCH,	CAT_PARAMETER,	LONG_FETCH},		//TEXT_FETCH					//60
+		{SHORT_FOLLOW,	CAT_SEQUENCER,	LONG_FOLLOW},		//TEXT_FOLLOW
+		{SHORT_QUANT,	CAT_SEQUENCER,	LONG_QUANTISATION},			//TEXT_QUANTISATION
+
+		{SHORT_TRACK,	CAT_SEQUENCER,	LONG_AUTOMATION_TRACK},			//TEXT_AUTOMATION_TRACK
+
+		{SHORT_DEST,	CAT_SEQUENCER,	LONG_AUTOMATION_DEST},	//TEXT_PARAM_DEST
+		{SHORT_VALUE,	CAT_SEQUENCER,	LONG_AUTOMATION_VAL},	//TEXT_PARAM_VAL
+
+		{SHORT_SHUFFLE,	CAT_SEQUENCER,	LONG_SHUFFLE},	//TEXT_SHUFFLE
+
+		{SHORT_SCREEN_SAVER, CAT_GLOBAL,LONG_SCREENSAVER},	//TEXT_SCREENSAVER_ON_OFF
+
+		{SHORT_EMPTY,CAT_EMPTY,LONG_EMPTY},					//SKIP
+
+		{SHORT_X,CAT_GENERATOR,LONG_X},	//TEXT_POS_X,
+		{SHORT_Y,CAT_GENERATOR,LONG_Y},	//TEXT_POS_Y,										//70
+		{SHORT_FLUX,CAT_GENERATOR,LONG_FLUX},	//TEXT_FLUX,
+		{SHORT_FREQ,CAT_GENERATOR,LONG_FREQ},	//TEXT_SOM_FREQ,
+		{SHORT_MIDI,CAT_MIDI,LONG_MODE},	//TEXT_MIDI_MODE
+		{SHORT_MIDI_ROUTING, CAT_MIDI, LONG_MIDI_ROUTING}, // TEXT_MIDI_ROUTING
+		{SHORT_MIDI_FILT_TX, CAT_MIDI, LONG_MIDI_FILT_TX}, // TEXT_MIDI_FILT_TX
+		{SHORT_MIDI_FILT_RX, CAT_MIDI, LONG_MIDI_FILT_RX}, // TEXT_MIDI_FILT_RX
+		{SHORT_TRIGGER_IN, CAT_CLOCK, LONG_CLOCK_IN}, // TEXT_TRIGGER_IN_PPQ
+		{SHORT_TRIGGER_OUT1, CAT_CLOCK, LONG_CLOCK_OUT1}, // TEXT_TRIGGER_OUT1_PPQ
+		{SHORT_TRIGGER_OUT2, CAT_CLOCK, LONG_TRIGGER_OUT2}, // TEXT_TRIGGER_OUT2_PPQ
+		{SHORT_MODE, CAT_CLOCK, LONG_TRIGGER_GATE_MODE}, //TEXT_TRIGGER_GATE_MODE
+		{SHORT_BAR_RESET_MODE, CAT_SEQUENCER, LONG_BAR_RESET_MODE}, // TEXT_BAR_RESET_MODE
+		{SHORT_CHANNEL, CAT_MIDI, LONG_MIDI_CHANNEL}, // TEXT_MIDI_CHAN_GLOBAL
+		{SHORT_PWM, CAT_OSC, LONG_PWM}, // PWM
+		{SHORT_TYPE, CAT_FX, LONG_TYPE},  //TEXT_FX_TYPE
+		{SHORT_OUT,CAT_FX,LONG_AUDIO_OUT},  //TEXT_FX_ROUTING*/
+		{SHORT_DRY_WET, CAT_FX, LONG_DRY_WET},  //TEXT_FX_DRY_WET*/
+
+
+		{SHORT_DRIVE, CAT_FX, LONG_DRIVE},/*TEXT_FX_DIST_DRIVE*/
+		{SHORT_COLOR, CAT_FX, LONG_COLOR},/*TEXT_FX_DIST_P1*/
+		{SHORT_RATIO, CAT_FX, LONG_RATIO},/*TEXT_FX_RATIO*/
+		{SHORT_ATTACK, CAT_FX, LONG_ATTACK},/*TEXT_FX_COMP_ATTACK*/
+		{SHORT_DECAY, CAT_FX, LONG_DECAY},/*TEXT_FX_COMP_DECAY*/
+		{SHORT_THRESH, CAT_FX, LONG_THRESH},/*TEXT_FX_COMP_THRESHOLD*/
+		{SHORT_FREQ, CAT_FX, LONG_FREQ},/*TEXT_FX_FREQ*/
+		{SHORT_WAVE, CAT_FX, LONG_WAVE},/*TEXT_FX_WAVE*/
+		{SHORT_VOL, CAT_FX, LONG_VOL},/*TEXT_FX_VOLUME*/
+		{SHORT_TONE, CAT_FX, LONG_TONE},/*TEXT_FX_TONE*/
+		{SHORT_GAIN, CAT_FX, LONG_GAIN},/*TEXT_FX_GAIN*/
+		{SHORT_FEEDBACK, CAT_FX, LONG_FEEDBACK},/*TEXT_FX_FEEDBACK*/
+		{SHORT_RANGE, CAT_FX, LONG_RANGE},/*TEXT_FX_RANGE*/
+		{SHORT_TIME, CAT_FX, LONG_TIME},/*TEXT_FX_TIME*/
+		{SHORT_PRE, CAT_FX, LONG_PREDELAY},/*TEXT_FX_PREDELAY*/
+		{SHORT_REF, CAT_FX, LONG_REFLECTION},/*TEXT_FX_REFLECTION*/
+		{SHORT_P1, CAT_FX, LONG_P1},/*TEXT_FX_P1*/
+		{SHORT_P2, CAT_FX, LONG_P2},/*TEXT_FX_P2*/
+		{SHORT_P3, CAT_FX, LONG_P3},/*TEXT_FX_P3*/
+		{SHORT_P4, CAT_FX, LONG_P4},/*TEXT_FX_P4*/
+		{SHORT_KCM, CAT_GLOBAL, LONG_PATTERN_MODE},/*TEXT_AUTO_SWITCH_KIT*/
+		{SHORT_LIMITER, CAT_GLOBAL, LONG_LIMITER},/*TEXT_MIXER_LIMITER*/
+		{SHORT_DJ_FILTER, CAT_DJ_FILTER, LONG_DJ_FILTER},/*TEXT_DJ_FILTER*/
+		{SHORT_FIL_RESO, CAT_DJ_FILTER, LONG_DJ_RESO},/*TEXT_DJ_RESO*/
+
+
+};
+
+//---------------------------------------------------------------
+// Parameter types. These correspond with ParamEnums and entries in parameter_values
+const enum Datatypes PROGMEM parameter_dtypes[NUM_PARAMS] = {
+	    /*PAR_NONE*/ 			DTYPE_0B127,							// 0
+	    /*PAR_OSC_WAVE_DRUM1*/ 	DTYPE_MENU | (MENU_WAVEFORM<<8),
+	    /*PAR_OSC_WAVE_DRUM2*/ 	DTYPE_MENU | (MENU_WAVEFORM<<8),
+	    /*PAR_OSC_WAVE_DRUM3*/ 	DTYPE_MENU | (MENU_WAVEFORM<<8),
+	    /*PAR_OSC_WAVE_SNARE*/  DTYPE_MENU | (MENU_WAVEFORM<<8),
+	    /*NRPN_DATA_ENTRY_COARSE*/ DTYPE_0B127,
+	    /*PAR_WAVE1_CYM*/  		DTYPE_MENU | (MENU_WAVEFORM<<8),
+	    /*PAR_WAVE1_HH*/  		DTYPE_MENU | (MENU_WAVEFORM<<8),
+	    /*PAR_COARSE1*/ 		DTYPE_PM63,//DTYPE_0B127,
+	    /*PAR_FINE1*/ 			DTYPE_PM63,
+	    /*PAR_COARSE2*/			DTYPE_PM63,//DTYPE_0B127,,							// 10
+	    /*PAR_FINE2*/ 			DTYPE_PM63,
+	    /*PAR_COARSE3*/ 		DTYPE_PM63,//DTYPE_0B127,,
+	    /*PAR_FINE3*/ 			DTYPE_PM63,
+	    /*PAR_COARSE4*/ 		DTYPE_PM63,//DTYPE_0B127,,
+	    /*PAR_FINE4*/ 			DTYPE_PM63,
+	    /*PAR_COARSE5*/			DTYPE_PM63,//DTYPE_0B127,,
+	    /*PAR_FINE5*/ 			DTYPE_PM63,
+	    /*PAR_COARSE6*/ 		DTYPE_PM63,//DTYPE_0B127,,
+	    /*PAR_FINE6*/ 			DTYPE_PM63,
+	    /*PAR_MOD_WAVE_DRUM1*/  DTYPE_MENU | (MENU_WAVEFORM<<8),		//20
+	    /*PAR_MOD_WAVE_DRUM2*/  DTYPE_MENU | (MENU_WAVEFORM<<8),
+	    /*PAR_MOD_WAVE_DRUM3*/  DTYPE_MENU | (MENU_WAVEFORM<<8),
+	    /*PAR_WAVE2_CYM*/ 		DTYPE_MENU | (MENU_WAVEFORM<<8),
+	    /*PAR_WAVE3_CYM*/ 		DTYPE_MENU | (MENU_WAVEFORM<<8),
+	    /*PAR_WAVE2_HH*/ 		DTYPE_MENU | (MENU_WAVEFORM<<8),
+	    /*PAR_WAVE3_HH*/ 		DTYPE_MENU | (MENU_WAVEFORM<<8),
+	    /*PAR_NOISE_FREQ1*/ 	DTYPE_0B127,
+	    /*PAR_MIX1*/ 			DTYPE_0B127,
+	    /*PAR_MOD_OSC_F1_CYM*/ 	DTYPE_PM63,//DTYPE_0B127,,
+	    /*PAR_MOD_OSC_F2_CYM*/ 	DTYPE_PM63,//DTYPE_0B127,,							//30
+	    /*PAR_MOD_OSC_GAIN1_CYM*/ DTYPE_0B127,
+	    /*PAR_MOD_OSC_GAIN2_CYM*/ DTYPE_0B127,
+	    /*PAR_MOD_OSC_F1*/ 		DTYPE_PM63,//DTYPE_0B127,,
+	    /*PAR_MOD_OSC_F2*/ 		DTYPE_PM63,//DTYPE_0B127,,
+	    /*PAR_MOD_OSC_GAIN1*/ 	DTYPE_0B127,
+	    /*PAR_MOD_OSC_GAIN2*/ 	DTYPE_0B127,
+	    /*PAR_FILTER_FREQ_1*/ 	DTYPE_0B127,
+	    /*PAR_FILTER_FREQ_2*/ 	DTYPE_0B127,
+	    /*PAR_FILTER_FREQ_3*/ 	DTYPE_0B127,
+	    /*PAR_FILTER_FREQ_4*/ 	DTYPE_0B127,							//40
+	    /*PAR_FILTER_FREQ_5*/ 	DTYPE_0B127,
+	    /*PAR_FILTER_FREQ_6*/ 	DTYPE_0B127,
+	    /*PAR_RESO_1*/ 			DTYPE_0B127,
+	    /*PAR_RESO_2*/ 			DTYPE_0B127,
+	    /*PAR_RESO_3*/ 			DTYPE_0B127,
+	    /*PAR_RESO_4*/ 			DTYPE_0B127,
+	    /*PAR_RESO_5*/ 			DTYPE_0B127,
+	    /*PAR_RESO_6*/ 			DTYPE_0B127,
+	    /*PAR_VELOA1*/ 			DTYPE_0B127,
+	    /*PAR_VELOD1*/ 			DTYPE_0B127,							//50
+	    /*PAR_VELOA2*/ 			DTYPE_0B127,
+	    /*PAR_VELOD2*/ 			DTYPE_0B127,
+	    /*PAR_VELOA3*/ 			DTYPE_0B127,
+	    /*PAR_VELOD3*/ 			DTYPE_0B127,
+	    /*PAR_VELOA4*/ 			DTYPE_0B127,
+	    /*PAR_VELOD4*/ 			DTYPE_0B127,
+	    /*PAR_VELOA5*/ 			DTYPE_0B127,
+	    /*PAR_VELOD5*/ 			DTYPE_0B127,
+	    /*PAR_VELOA6*/ 			DTYPE_0B127,
+	    /*PAR_VELOD6_CLOSED*/ 	DTYPE_0B127,							//60
+	    /*PAR_VELOD6_OPEN*/ 	DTYPE_0B127,
+	    /*PAR_VOL_SLOPE1*/ 		DTYPE_0B127,
+	    /*PAR_VOL_SLOPE2*/ 		DTYPE_0B127,
+	    /*PAR_VOL_SLOPE3*/ 		DTYPE_0B127,
+	    /*PAR_VOL_SLOPE4*/ 		DTYPE_0B127,
+	    /*PAR_VOL_SLOPE5*/ 		DTYPE_0B127,
+	    /*PAR_VOL_SLOPE6*/ 		DTYPE_0B127,
+	    /*PAR_REPEAT4*/ 		DTYPE_0B127,
+	    /*PAR_REPEAT5*/ 		DTYPE_0B127,
+	    /*PAR_MOD_EG1*/ 		DTYPE_0B127,							//70
+	    /*PAR_MOD_EG2*/ 		DTYPE_0B127,
+	    /*PAR_MOD_EG3*/ 		DTYPE_0B127,
+	    /*PAR_MOD_EG4*/ 		DTYPE_0B127,
+	    /*PAR_MODAMNT1*/ 		DTYPE_0B127,
+	    /*PAR_MODAMNT2*/ 		DTYPE_0B127,
+	    /*PAR_MODAMNT3*/ 		DTYPE_0B127,
+	    /*PAR_MODAMNT4*/ 		DTYPE_0B127,
+	    /*PAR_PITCH_SLOPE1*/ 	DTYPE_0B127,
+	    /*PAR_PITCH_SLOPE2*/ 	DTYPE_0B127,
+	    /*PAR_PITCH_SLOPE3*/ 	DTYPE_0B127,							//80
+	    /*PAR_PITCH_SLOPE4*/ 	DTYPE_0B127,
+	    /*PAR_FMAMNT1*/ 		DTYPE_0B127,
+	    /*PAR_FM_FREQ1*/ 		DTYPE_PM63,//DTYPE_0B127,
+	    /*PAR_FMAMNT2*/ 		DTYPE_0B127,
+	    /*PAR_FM_FREQ2*/ 		DTYPE_PM63,//DTYPE_0B127,
+	    /*PAR_FMAMNT3*/ 		DTYPE_0B127,
+	    /*PAR_FM_FREQ3*/ 		DTYPE_PM63,//DTYPE_0B127,
+	    /*PAR_VOL1*/ 			DTYPE_0B127,
+	    /*PAR_VOL2*/ 			DTYPE_0B127,
+	    /*PAR_VOL3*/ 			DTYPE_0B127,							//90
+	    /*PAR_VOL4*/ 			DTYPE_0B127,
+	    /*PAR_VOL5*/ 			DTYPE_0B127,
+	    /*PAR_VOL6*/ 			DTYPE_0B127,
+	    /*PAR_PAN1*/ 			DTYPE_PM63,
+	    /*PAR_PAN2*/ 			DTYPE_PM63,
+	    /*PAR_PAN3*/ 			DTYPE_PM63,
+	    /*NRPN_FINE*/ 			DTYPE_0B127,
+	    /*NRPN_COARSE*/ 		DTYPE_0B127,
+	    /*PAR_PAN4*/ 			DTYPE_PM63,
+	    /*PAR_PAN5*/ 			DTYPE_PM63,								//100
+	    /*PAR_PAN6*/ 			DTYPE_PM63,
+	    /*PAR_DRIVE1*/ 			DTYPE_0B127,
+	    /*PAR_DRIVE2*/ 			DTYPE_0B127,
+	    /*PAR_DRIVE3*/ 			DTYPE_0B127,
+	    /*PAR_SNARE_DISTORTION*/ DTYPE_0B127,
+	    /*PAR_CYMBAL_DISTORTION*/ DTYPE_0B127,
+	    /*PAR_HAT_DISTORTION*/ 	DTYPE_0B127,
+	    /*PAR_VOICE_DECIMATION1*/ DTYPE_0B127,
+	    /*PAR_VOICE_DECIMATION2*/ DTYPE_0B127,
+	    /*PAR_VOICE_DECIMATION3*/ DTYPE_0B127,							//110
+	    /*PAR_VOICE_DECIMATION4*/ DTYPE_0B127,
+	    /*PAR_VOICE_DECIMATION5*/ DTYPE_0B127,
+	    /*PAR_VOICE_DECIMATION6*/ DTYPE_0B127,
+	    /*PAR_VOICE_DECIMATION_ALL */ DTYPE_0B127,
+	    /*PAR_FREQ_LFO1 */ 		DTYPE_0B127,
+	    /*PAR_FREQ_LFO2*/		DTYPE_0B127,
+	    /*PAR_FREQ_LFO3*/ 		DTYPE_0B127,
+	    /*PAR_FREQ_LFO4*/ 		DTYPE_0B127,
+	    /*PAR_FREQ_LFO5*/ 		DTYPE_0B127,
+	    /*PAR_FREQ_LFO6*/ 		DTYPE_0B127,							//120
+	    /*PAR_AMOUNT_LFO1*/		DTYPE_0B127,
+	    /*PAR_AMOUNT_LFO2*/ 	DTYPE_0B127,
+	    /*PAR_AMOUNT_LFO3*/ 	DTYPE_0B127,
+	    /*PAR_AMOUNT_LFO4*/		DTYPE_0B127,
+	    /*PAR_AMOUNT_LFO5*/ 	DTYPE_0B127,
+	    /*PAR_AMOUNT_LFO6*/ 	DTYPE_0B127,
+	    /*PAR_RESERVED4*/ 		DTYPE_0B127,
+	    /*PAR_FILTER_DRIVE_1*/ 	DTYPE_0B127,
+	    /*PAR_FILTER_DRIVE_2*/ 	DTYPE_0B127,
+	    /*PAR_FILTER_DRIVE_3*/ 	DTYPE_0B127,							//130
+	    /*PAR_FILTER_DRIVE_4*/ 	DTYPE_0B127,
+	    /*PAR_FILTER_DRIVE_5*/ 	DTYPE_0B127,
+	    /*PAR_FILTER_DRIVE_6*/	DTYPE_0B127,
+	    /*PAR_MIX_MOD_1*/ 		DTYPE_MENU | (MENU_MIX_FM<<8),
+	    /*PAR_MIX_MOD_2*/ 		DTYPE_MENU | (MENU_MIX_FM<<8),
+	    /*PAR_MIX_MOD_3*/ 		DTYPE_MENU | (MENU_MIX_FM<<8),
+	    /*PAR_VOLUME_MOD_ON_OFF1*/ DTYPE_ON_OFF,
+	    /*PAR_VOLUME_MOD_ON_OFF2*/ DTYPE_ON_OFF,
+	    /*PAR_VOLUME_MOD_ON_OFF3*/ DTYPE_ON_OFF,
+	    /*PAR_VOLUME_MOD_ON_OFF4*/ DTYPE_ON_OFF,						//140
+	    /*PAR_VOLUME_MOD_ON_OFF5*/ DTYPE_ON_OFF,
+	    /*PAR_VOLUME_MOD_ON_OFF6*/ DTYPE_ON_OFF,
+	    /*PAR_VELO_MOD_AMT_1*/ 	DTYPE_0B127,
+	    /*PAR_VELO_MOD_AMT_2*/ 	DTYPE_0B127,
+	    /*PAR_VELO_MOD_AMT_3*/ 	DTYPE_0B127,
+	    /*PAR_VELO_MOD_AMT_4*/ 	DTYPE_0B127,
+	    /*PAR_VELO_MOD_AMT_5*/ 	DTYPE_0B127,
+	    /*PAR_VELO_MOD_AMT_6*/ 	DTYPE_0B127,
+	    /*PAR_VEL_DEST_1*/ 		DTYPE_TARGET_SELECTION_VELO,
+	    /*PAR_VEL_DEST_2*/ 		DTYPE_TARGET_SELECTION_VELO,			//150
+	    /*PAR_VEL_DEST_3*/ 		DTYPE_TARGET_SELECTION_VELO,
+	    /*PAR_VEL_DEST_4*/ 		DTYPE_TARGET_SELECTION_VELO,
+	    /*PAR_VEL_DEST_5*/ 		DTYPE_TARGET_SELECTION_VELO,
+	    /*PAR_VEL_DEST_6*/ 		DTYPE_TARGET_SELECTION_VELO,
+	    /*PAR_WAVE_LFO1*/ 		DTYPE_MENU | (MENU_LFO_WAVES<<8),
+	    /*PAR_WAVE_LFO2*/ 		DTYPE_MENU | (MENU_LFO_WAVES<<8),
+	    /*PAR_WAVE_LFO3*/ 		DTYPE_MENU | (MENU_LFO_WAVES<<8),
+	    /*PAR_WAVE_LFO4 */ 		DTYPE_MENU | (MENU_LFO_WAVES<<8),
+	    /*PAR_WAVE_LFO5*/ 		DTYPE_MENU | (MENU_LFO_WAVES<<8),
+	    /*PAR_WAVE_LFO6*/ 		DTYPE_MENU | (MENU_LFO_WAVES<<8),		//160
+	    /*PAR_VOICE_LFO1*/ 		DTYPE_VOICE_LFO,
+	    /*PAR_VOICE_LFO2*/ 		DTYPE_VOICE_LFO,
+	    /*PAR_VOICE_LFO3*/ 		DTYPE_VOICE_LFO,
+	    /*PAR_VOICE_LFO4*/ 		DTYPE_VOICE_LFO,
+	    /*PAR_VOICE_LFO5*/ 		DTYPE_VOICE_LFO,
+	    /*PAR_VOICE_LFO6*/ 		DTYPE_VOICE_LFO,
+	    /*PAR_TARGET_LFO1*/ 	DTYPE_TARGET_SELECTION_LFO,
+	    /*PAR_TARGET_LFO2*/ 	DTYPE_TARGET_SELECTION_LFO,
+	    /*PAR_TARGET_LFO3*/ 	DTYPE_TARGET_SELECTION_LFO,
+	    /*PAR_TARGET_LFO4*/ 	DTYPE_TARGET_SELECTION_LFO,				//170
+	    /*PAR_TARGET_LFO5*/ 	DTYPE_TARGET_SELECTION_LFO,
+	    /*PAR_TARGET_LFO6*/ 	DTYPE_TARGET_SELECTION_LFO,
+	    /*PAR_RETRIGGER_LFO1*/ 	DTYPE_MENU | (MENU_RETRIGGER<<8),
+	    /*PAR_RETRIGGER_LFO2*/ 	DTYPE_MENU | (MENU_RETRIGGER<<8),
+	    /*PAR_RETRIGGER_LFO3*/ 	DTYPE_MENU | (MENU_RETRIGGER<<8),
+	    /*PAR_RETRIGGER_LFO4*/ 	DTYPE_MENU | (MENU_RETRIGGER<<8),
+	    /*PAR_RETRIGGER_LFO5*/ 	DTYPE_MENU | (MENU_RETRIGGER<<8),
+	    /*PAR_RETRIGGER_LFO6*/ 	DTYPE_MENU | (MENU_RETRIGGER<<8),
+	    /*PAR_SYNC_LFO1*/ 		DTYPE_MENU | (MENU_SYNC_RATES<<8),
+	    /*PAR_SYNC_LFO2*/ 		DTYPE_MENU | (MENU_SYNC_RATES<<8),		//180
+	    /*PAR_SYNC_LFO3*/ 		DTYPE_MENU | (MENU_SYNC_RATES<<8),
+	    /*PAR_SYNC_LFO4*/ 		DTYPE_MENU | (MENU_SYNC_RATES<<8),
+	    /*PAR_SYNC_LFO5*/ 		DTYPE_MENU | (MENU_SYNC_RATES<<8),
+	    /*PAR_SYNC_LFO6*/ 		DTYPE_MENU | (MENU_SYNC_RATES<<8),
+	    /*PAR_OFFSET_LFO1*/ 	DTYPE_0B127,
+	    /*PAR_OFFSET_LFO2*/ 	DTYPE_0B127,
+	    /*PAR_OFFSET_LFO3*/ 	DTYPE_0B127,
+	    /*PAR_OFFSET_LFO4*/ 	DTYPE_0B127,
+	    /*PAR_OFFSET_LFO5*/ 	DTYPE_0B127,
+	    /*PAR_OFFSET_LFO6*/ 	DTYPE_0B127,							//190
+	    /*PAR_FILTER_TYPE_1*/ 	DTYPE_MENU | (MENU_FILTER<<8),
+	    /*PAR_FILTER_TYPE_2*/ 	DTYPE_MENU | (MENU_FILTER<<8),
+	    /*PAR_FILTER_TYPE_3*/ 	DTYPE_MENU | (MENU_FILTER<<8),
+	    /*PAR_FILTER_TYPE_4*/ 	DTYPE_MENU | (MENU_FILTER<<8),
+	    /*PAR_FILTER_TYPE_5*/ 	DTYPE_MENU | (MENU_FILTER<<8),
+	    /*PAR_FILTER_TYPE_6*/ 	DTYPE_MENU | (MENU_FILTER<<8),
+	    /*PAR_TRANS1_VOL*/ 		DTYPE_0B127,
+	    /*PAR_TRANS2_VOL*/ 		DTYPE_0B127,
+	    /*PAR_TRANS3_VOL*/ 		DTYPE_0B127,
+	    /*PAR_TRANS4_VOL*/ 		DTYPE_0B127,							//200
+	    /*PAR_TRANS5_VOL*/ 		DTYPE_0B127,
+	    /*PAR_TRANS6_VOL*/ 		DTYPE_0B127,
+	    /*PAR_TRANS1_WAVE*/ 	DTYPE_MENU | (MENU_TRANS<<8),
+	    /*PAR_TRANS2_WAVE*/ 	DTYPE_MENU | (MENU_TRANS<<8),
+	    /*PAR_TRANS3_WAVE*/ 	DTYPE_MENU | (MENU_TRANS<<8),
+	    /*PAR_TRANS4_WAVE*/ 	DTYPE_MENU | (MENU_TRANS<<8),
+	    /*PAR_TRANS5_WAVE*/ 	DTYPE_MENU | (MENU_TRANS<<8),
+	    /*PAR_TRANS6_WAVE*/ 	DTYPE_MENU | (MENU_TRANS<<8),
+	    /*PAR_TRANS1_FREQ*/ 	DTYPE_0B127,
+	    /*PAR_TRANS2_FREQ*/ 	DTYPE_0B127,							//210
+	    /*PAR_TRANS3_FREQ*/ 	DTYPE_0B127,
+	    /*PAR_TRANS4_FREQ*/ 	DTYPE_0B127,
+	    /*PAR_TRANS5_FREQ*/ 	DTYPE_0B127,
+	    /*PAR_TRANS6_FREQ*/ 	DTYPE_0B127,
+	    /*PAR_AUDIO_OUT1*/ 		DTYPE_MENU | (MENU_AUDIO_OUT<<8),
+	    /*PAR_AUDIO_OUT2*/ 		DTYPE_MENU | (MENU_AUDIO_OUT<<8),
+	    /*PAR_AUDIO_OUT3*/ 		DTYPE_MENU | (MENU_AUDIO_OUT<<8),
+	    /*PAR_AUDIO_OUT4*/ 		DTYPE_MENU | (MENU_AUDIO_OUT<<8),
+	    /*PAR_AUDIO_OUT5*/ 		DTYPE_MENU | (MENU_AUDIO_OUT<<8),
+	    /*PAR_AUDIO_OUT6*/ 		DTYPE_MENU | (MENU_AUDIO_OUT<<8),		//220
+	    // these 7
+	    /*PAR_UNUSED1*/		DTYPE_NOTE_NAME,
+	    /*PAR_UNUSED2*/		DTYPE_NOTE_NAME,
+	    /*PAR_UNUSED3*/		DTYPE_NOTE_NAME,
+	    /*PAR_UNUSED4*/		DTYPE_NOTE_NAME,
+	    /*PAR_UNUSED5*/		DTYPE_NOTE_NAME,
+	    /*PAR_UNUSED6*/		DTYPE_NOTE_NAME,
+	    /*PAR_UNUSED7*/		DTYPE_NOTE_NAME,
+
+		/*PAR_PWM_1,*/			DTYPE_0B127,
+		/*PAR_PWM_2,*/			DTYPE_0B127,
+		/*PAR_PWM_3,*/			DTYPE_0B127,
+		/*PAR_PWM_4,*/			DTYPE_0B127,
+		/*PAR_PWM_5,*/			DTYPE_0B127,
+		/*PAR_PWM_6,*/			DTYPE_0B127,
+
+		/*PAR_FX_TYPE*/			DTYPE_MENU | (MENU_FX<<8),
+		/*TEXT_FX_ROUTING*/		DTYPE_MENU | (MENU_AUDIO_OUT_FX<<8),
+		/*TEXT_FX_AMOUNT*/		DTYPE_0B100,
+
+		/*PAR_FX_DIST_TYPE*/ 	DTYPE_MENU| (MENU_DIST<<8),
+		/*PAR_FX_P1*/			DTYPE_0B127,
+		/*PAR_FX_P2*/			DTYPE_0B127,
+		/*PAR_FX_P3*/			DTYPE_0B127,
+		/*PAR_FX_P4*/			DTYPE_0B127,
+		/*PAR_FX_RATIO*/		DTYPE_MENU | (MENU_RATIO<<8),
+		/*PAR_FX_WAVE*/			DTYPE_MENU | (MENU_WAVEFORM<<8),
+		/*PAR_FX_REVERB_TYPE*/	DTYPE_MENU | (MENU_REVERB<<8),
+		/*PAR_FX_DELAY_TYPE*/	DTYPE_MENU | (MENU_DELAY<<8),
+		/*PAR_MORPH_KIT_DEST*/	DTYPE_0B127,
+
+
+	    /*PAR_ROLL*/ 			DTYPE_MENU | (MENU_ROLL_RATES<<8),
+	    /*PAR_MORPH*/ 			DTYPE_0B255,
+	    /*PAR_ACTIVE_STEP */ 	DTYPE_0B127,							//230
+	    /*PAR_STEP_VOLUME*/ 	DTYPE_0B127,
+	    /*PAR_STEP_PROB*/ 		DTYPE_0B100,
+	    /*PAR_STEP_NOTE*/ 		DTYPE_NOTE_NAME,
+	    /*PAR_EUKLID_LENGTH*/ 	DTYPE_1B16,
+	    /*PAR_EUKLID_STEPS*/ 	DTYPE_1B16,
+	    /*PAR_EUKLID_ROTATION*/	DTYPE_0B15,
+	    /*PAR_AUTOM_TRACK*/ 	DTYPE_0b1,
+	    /*PAR_P1_DEST*/ 		DTYPE_AUTOM_TARGET,
+	    /*PAR_P2_DEST*/ 		DTYPE_AUTOM_TARGET,
+	    /*PAR_P1_VAL*/ 			DTYPE_0B127,							//240
+	    /*PAR_P2_VAL*/ 			DTYPE_0B127,
+	    /*PAR_SHUFFLE*/ 		DTYPE_0B127,
+	    /*PAR_UNUSED*/ 			DTYPE_0B127,
+	    /*PAR_PATTERN_NEXT*/ 	DTYPE_MENU | (MENU_NEXT_PATTERN<<8),
+	    /*PAR_TRACK_LENGTH*/ 	DTYPE_1B64,
+	    /*PAR_GLO_SAT*/			DTYPE_0B127,
+	    /*PAR_DJ_FILTER*/ 		DTYPE_PM63,
+	    /*PAR_DJ_RESO*/ 		DTYPE_0B127,
+	    /*PAR_SOM_FREQ*/ 		DTYPE_0B127,
+	    /*PAR_TRACK_ROTATION*/  DTYPE_1B16,  //**PATROT this is not shown in menu, but if it were it would really be 0 to 15
+		/*PAR_STEP_FLAM*/ 		DTYPE_MENU | (MENU_STEP_FLAM<<8),							//251
+		/*PAR_STEP_SHIFT*/		DTYPE_MENU | (MENU_STEP_SHIFT<<8),
+	    /*PAR_BPM*/ 			DTYPE_0B255,							//251 
+	    /*PAR_MIDI_CHAN_1*/ 	DTYPE_1B16,
+	    /*PAR_MIDI_CHAN_2*/ 	DTYPE_1B16,
+	    /*PAR_MIDI_CHAN_3*/ 	DTYPE_1B16,
+	    /*PAR_MIDI_CHAN_4*/ 	DTYPE_1B16,
+	    /*PAR_MIDI_CHAN_5*/ 	DTYPE_1B16,
+	    /*PAR_MIDI_CHAN_6*/ 	DTYPE_1B16,
+	    /*PAR_FETCH*/ 			DTYPE_ON_OFF,
+	    /*PAR_FOLLOW*/ 			DTYPE_ON_OFF,//DTYPE_MENU | (MENU_FOLLOW<<8),
+	    /*PAR_QUANTISATION*/ 	DTYPE_MENU | (MENU_SEQ_QUANT<<8),
+	    /*PAR_SCREENSAVER_ON_OFF*/ DTYPE_ON_OFF,						//261
+	    /*PAR_MIDI_MODE*/ 		DTYPE_MENU | (MENU_MIDI<<8),			  // This is now unused.
+	    /*PAR_MIDI_CHAN_7*/ 	DTYPE_1B16,
+	    /*PAR_MIDI_ROUTING*/	DTYPE_MENU | (MENU_MIDI_ROUTING<<8),
+	    /*PAR_MIDI_FILT_TX*/    DTYPE_MENU | (MENU_MIDI_FILTERING<<8),
+	    /*PAR_MIDI_FILT_RX*/    DTYPE_MENU | (MENU_MIDI_FILTERING<<8),
+		/*PAR_PRESCALER_CLOCK_IN*/		DTYPE_MENU | (MENU_PPQ_IN<<8),
+		/*PAR_PRESCALER_CLOCK_OUT1*/	DTYPE_MENU | (MENU_PPQ_OUT<<8),
+		/*PAR_PRESCALER_CLOCK_OUT2*/	DTYPE_MENU | (MENU_PPQ_OUT<<8),
+		/*PAR_TRIGGER_GATE_MODE*/	DTYPE_ON_OFF,
+	    /*PAR_BAR_RESET_MODE*/  DTYPE_ON_OFF,
+	    /*PAR_MIDI_CHAN_GLOBAL*/DTYPE_1B16,		// global midi channel
+
+	    /*PAR_MIDI_NOTE1*/		DTYPE_NOTE_NAME,
+	    /*PAR_MIDI_NOTE2*/		DTYPE_NOTE_NAME,
+	    /*PAR_MIDI_NOTE3*/		DTYPE_NOTE_NAME,
+	    /*PAR_MIDI_NOTE4*/		DTYPE_NOTE_NAME,
+	    /*PAR_MIDI_NOTE5*/		DTYPE_NOTE_NAME,
+	    /*PAR_MIDI_NOTE6*/		DTYPE_NOTE_NAME,
+	    /*PAR_MIDI_NOTE7*/		DTYPE_NOTE_NAME,
+		/*PAR_PATTERN_MODE*/ DTYPE_MENU | (MENU_PAT_MODE<<8),
+		/*PAR_MIXER_LIMITER*/	DTYPE_ON_OFF,
+};
+//---------------------------------------------------------------
+//Voice pages of slots that run a non-stock engine: built from the engine's stock
+//page, every parameter moved to the slot's parameter with the same function
+static Page menu_voicePages[VOICE7_PAGE-VOICE1_PAGE+1][NUM_SUB_PAGES];
+static uint8_t menu_voicePageBuilt[VOICE7_PAGE-VOICE1_PAGE+1];
+
+static uint16_t menu_trackPar(const uint16_t par, const uint8_t fromTrack, const uint8_t toTrack)
+{
+	static const uint16_t midiChan[7] = { PAR_MIDI_CHAN_1, PAR_MIDI_CHAN_2, PAR_MIDI_CHAN_3, PAR_MIDI_CHAN_4, PAR_MIDI_CHAN_5, PAR_MIDI_CHAN_6, PAR_MIDI_CHAN_7 };
+	if(par == midiChan[fromTrack])
+		return midiChan[toTrack];
+	if(par == PAR_MIDI_NOTE1 + fromTrack)
+		return PAR_MIDI_NOTE1 + toTrack;
+	return par;
+}
+
+void menu_updateVoicePages()
+{
+	for(uint8_t page=VOICE1_PAGE;page<=VOICE7_PAGE;page++)
+	{
+		//voice 7 is the 2nd trigger of slot 6
+		const uint8_t slot = page < NUM_VOICE_SLOTS ? page : NUM_VOICE_SLOTS-1;
+		const uint8_t engine = kitEngines[slot];
+		menu_voicePageBuilt[page] = engine != slot_stockEngine(slot);
+		if(!menu_voicePageBuilt[page])
+			continue;
+
+		const uint8_t stockSlot = kitEngines_stockSlot(engine);	//its page: VOICE1_PAGE + stockSlot
+		for(uint8_t sub=0;sub<NUM_SUB_PAGES;sub++)
+		{
+			Page* dst = &menu_voicePages[page][sub];
+			*dst = menuPages[VOICE1_PAGE + stockSlot][sub];
+			uint16_t* par = &dst->bot1;
+			uint8_t* text = &dst->top1;
+			for(uint8_t i=0;i<8;i++)
+			{
+				par[i] = menu_trackPar(par[i], stockSlot, page);
+				par[i] = kitEngines_mapParam(par[i], stockSlot, slot);
+				if(page == VOICE7_PAGE && par[i] == PAR_VELOD6_CLOSED)
+					par[i] = PAR_VELOD6_OPEN;	//decay B
+
+				//slot 6 has decay A (d1, voice 6) and B (d2, voice 7) whatever the
+				//engine, the other slots one decay (also for a hi-hat)
+				if(par[i] == PAR_VELOD6_CLOSED)
+					text[i] = TEXT_DECAY_CLOSED;
+				else if(par[i] == PAR_VELOD6_OPEN)
+					text[i] = TEXT_DECAY_OPEN;
+				else if(text[i] == TEXT_DECAY_CLOSED || text[i] == TEXT_DECAY_OPEN)
+					text[i] = TEXT_DECAY;
+			}
+		}
+	}
+}
+
+const Page* menu_getPage(const uint8_t page, const uint8_t sub)
+{
+	if(page <= VOICE7_PAGE && menu_voicePageBuilt[page])
+		return &menu_voicePages[page][sub];
+	return &menuPages[page][sub];
+}
+
+//for a sound parameter of a slot with a non-stock engine: the parameter with
+//the same function in the engine's stock slot (its type, display, ...)
+static uint16_t menu_stockParam(const uint16_t par)
+{
+	const uint8_t slot = kitEngines_slotOfParam(par);
+	if(slot < NUM_VOICE_SLOTS && kitEngines[slot] != slot_stockEngine(slot))
+	{
+		return kitEngines_mapParam(par, slot, kitEngines_stockSlot(kitEngines[slot]));
+	}
+	return par;
+}
+
+uint16_t menu_paramDtype(const uint16_t par)
+{
+	return parameter_dtypes[menu_stockParam(par)];
+}
+
+//tuning parameters show +-63 around 60 instead of 63
+static uint8_t menu_isTuningParam(const uint16_t parNr)
+{
+	switch(menu_stockParam(parNr))
+	{
+	case PAR_COARSE1: case PAR_COARSE2: case PAR_COARSE3: case PAR_COARSE4: case PAR_COARSE5: case PAR_COARSE6:
+	case PAR_FM_FREQ1: case PAR_FM_FREQ2: case PAR_FM_FREQ3:
+	case PAR_MOD_OSC_F1_CYM: case PAR_MOD_OSC_F2_CYM: case PAR_MOD_OSC_F1: case PAR_MOD_OSC_F2:
+		return 1;
+	default:
+		return 0;
+	}
+}
+
+static uint8_t getMaxEntriesForMenu(uint8_t menuId)
+{
+	switch(menuId) // clever GCC. no need to use pgm_read_byte
+	{
+	case MENU_TRANS:
+		return transientNames[0][0];
+	case MENU_AUDIO_OUT:
+		return outputNames[0][0];
+	case MENU_AUDIO_OUT_FX:
+		return outputNamesFx[0][0];
+	case MENU_FILTER:
+		return filterTypes[0][0];
+	case MENU_SYNC_RATES:
+		return syncRateNames[0][0];
+	case MENU_LFO_WAVES:
+		return lfoWaveNames[0][0];
+	case MENU_RETRIGGER:
+		return retriggerNames[0][0];
+	case MENU_FOLLOW:
+		return followNames[0][0];
+		break;
+	case MENU_SEQ_QUANT:
+		return quantisationNames[0][0];
+	case MENU_MIDI:
+		return midiModes[0][0];
+	case MENU_NEXT_PATTERN:
+		return nextPatternNames[0][0];
+	case MENU_WAVEFORM:
+		return (uint8_t)(waveformNames[0][0] + menu_numSamples);
+	case MENU_ROLL_RATES:
+		return rollRateNames[0][0];
+	case MENU_MIDI_ROUTING:
+		return midiRoutingNames[0][0];
+	case MENU_MIDI_FILTERING:
+		return midiFilterNames[0][0];
+	case MENU_PPQ_OUT:
+		return ppqOutNames[0][0];
+	case MENU_PPQ_IN:
+		return ppqInNames[0][0];
+	case MENU_MIX_FM:
+		return mixFmNames[0][0];
+
+	case MENU_FX:
+		return fxNames[0][0];
+
+	case MENU_DIST:
+		return distNames[0][0];
+
+	case MENU_RATIO:
+		return ratioNames[0][0];
+
+	case MENU_DELAY:
+		return delayNames[0][0];
+
+	case MENU_REVERB:
+		return reverbNames[0][0];
+
+	case MENU_PAT_MODE:
+		return patModeNames[0][0];
+
+	case MENU_STEP_FLAM:
+		return stepFlamNames[0][0];
+
+	case MENU_STEP_SHIFT:
+			return stepShiftNames[0][0];
+
+	default:
+		return 0;
+	}
+}
+
+// given a menu id, and a value returns the name from PROGMEM
+static void getMenuItemNameForValue(const uint8_t menuId, const uint8_t curParmVal, char *buf)
+{
+	//values from MIDI or old kits can be beyond a table's entries (count in its first entry)
+#define MENU_ITEM(table) (curParmVal < (uint8_t)(table)[0][0] ? (const void*)(table)[curParmVal + 1] : (const void*)menuText_dash)
+	const void *p=0;
+	switch(menuId)
+	{
+	case MENU_TRANS:
+		p = MENU_ITEM(transientNames);
+		break;
+	case MENU_AUDIO_OUT:
+		p = MENU_ITEM(outputNames);
+		break;
+
+	case MENU_AUDIO_OUT_FX:
+		p = MENU_ITEM(outputNamesFx);
+		break;
+	case MENU_FILTER:
+		p = MENU_ITEM(filterTypes);
+		break;
+	case MENU_WAVEFORM:
+		if(curParmVal < waveformNames[0][0])
+			p=waveformNames[curParmVal + 1];
+		else
+		{
+			//sample number: 2 digits (3 wrote one byte past the 3-character buffer)
+			buf[0]='s';
+			numtostrpu_2Bytes(&buf[1],(uint8_t)(curParmVal - waveformNames[0][0]),' ');
+			return;
+		}
+		break;
+
+	case MENU_SYNC_RATES:
+		p = MENU_ITEM(syncRateNames);
+		break;
+	case MENU_LFO_WAVES:
+		p = MENU_ITEM(lfoWaveNames);
+		break;
+	case MENU_RETRIGGER:
+		p = MENU_ITEM(retriggerNames);
+		break;
+	case MENU_FOLLOW:
+		p = MENU_ITEM(followNames);
+		break;
+	case MENU_SEQ_QUANT:
+		p = MENU_ITEM(quantisationNames);
+		break;
+	case MENU_MIDI:
+		p = MENU_ITEM(midiModes);
+		break;
+	case MENU_NEXT_PATTERN:
+		p = MENU_ITEM(nextPatternNames);
+		break;
+	case MENU_ROLL_RATES:
+		p = MENU_ITEM(rollRateNames);
+		break;
+	case MENU_MIDI_ROUTING:
+		p = MENU_ITEM(midiRoutingNames);
+		break;
+	case MENU_MIDI_FILTERING:
+		p = MENU_ITEM(midiFilterNames);
+		break;
+	case MENU_PPQ_IN:
+		p = MENU_ITEM(ppqInNames);
+		break;
+	case MENU_PPQ_OUT:
+		p = MENU_ITEM(ppqOutNames);
+		break;
+	case MENU_MIX_FM:
+		p = MENU_ITEM(mixFmNames);
+		break;
+
+	case MENU_FX:
+		p = MENU_ITEM(fxNames);
+		break;
+
+	case MENU_DIST:
+		p = MENU_ITEM(distNames);
+		break;
+
+	case MENU_RATIO:
+		p = MENU_ITEM(ratioNames);
+		break;
+
+	case MENU_DELAY:
+		p = MENU_ITEM(delayNames);
+		break;
+
+	case MENU_REVERB:
+		p = MENU_ITEM(reverbNames);
+		break;
+
+	case MENU_PAT_MODE:
+		p = MENU_ITEM(patModeNames);
+		break;
+
+	case MENU_STEP_FLAM:
+		p = MENU_ITEM(stepFlamNames);
+		break;
+
+	case MENU_STEP_SHIFT:
+		p = MENU_ITEM(stepShiftNames);
+		break;
+
+
+	default:
+		p=menuText_dash;
+		break;
+	}
+	memcpy(buf,p,3);
+#undef MENU_ITEM
+
+}
+
+// non space padded unsigned
+void numtostru(char *buf, uint8_t num)
+{
+    uint8_t b=0;
+    if(num > 99) {
+        buf[b++]=(char)('0'+(num / 100));
+        num %= 100;
+        if(num < 10)
+            buf[b++]='0';
+    }
+    if(num > 9) {
+        buf[b++]=(char)('0'+(num / 10));
+        num %=10;
+    }
+    buf[b]=(char)('0'+num);
+}
+
+void numtostrpu_2Bytes(char *buf, uint8_t num, char pad)
+{
+    if(num > 99) {
+    	//not possible for 2 char number
+        buf[0]='>';
+        buf[1]='>';
+        return;
+    }
+
+    if(num > 9) {
+        buf[0]=(char)('0'+(num / 10));
+        num %=10;
+    }
+    else
+    {
+        buf[0]='0';
+    }
+    buf[1]=(char)('0'+num);
+}

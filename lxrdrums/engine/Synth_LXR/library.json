@@ -1,0 +1,12 @@
+{
+  "name": "Synth_LXR",
+  "description": "The drum voices of OpenElixir-02 (LXR V2 firmware fork, GPL-3.0-only) as a Teensy Audio object",
+  "license": "GPL-3.0-only",
+  "frameworks": "arduino",
+  "platforms": "*",
+  "build": {
+    "srcDir": "src",
+    "flags": ["-I lxr", "-I lxr/shim", "-mfp16-format=ieee"],
+    "libArchive": false
+  }
+}
