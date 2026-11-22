@@ -34,9 +34,17 @@ set (BUNDLE_DIR ${CMAKE_CURRENT_BINARY_DIR}/${BUNDLE})
 
 # the engine: one translation unit with the firmware sources; their own
 # include paths (they have a config.h) and no warnings (firmware code)
+set (ENGINE_OPTIONS "-w")
+# 32-bit ARM GCC knows the FX buffer's __fp16 only with an fp16 format (the
+# Teensy build sets the same); elsewhere config.h maps it to _Float16
+include (CheckCCompilerFlag)
+check_c_compiler_flag (-mfp16-format=ieee HAVE_FP16_FORMAT)
+if (HAVE_FP16_FORMAT)
+	list (APPEND ENGINE_OPTIONS -mfp16-format=ieee)
+endif ()
 set_source_files_properties (${ENGINE_SRC} PROPERTIES
 	INCLUDE_DIRECTORIES "${ENGINE}/lxr;${ENGINE}/lxr/shim"
-	COMPILE_OPTIONS "-w")
+	COMPILE_OPTIONS "${ENGINE_OPTIONS}")
 
 # ---- the plugin ----
 
