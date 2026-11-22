@@ -38,6 +38,47 @@ set_source_files_properties (${ENGINE_SRC} PROPERTIES
 	INCLUDE_DIRECTORIES "${ENGINE}/lxr;${ENGINE}/lxr/shim"
 	COMPILE_OPTIONS "-w")
 
+# ---- the plugin ----
+
+add_library (edrumsynth MODULE src/edrumsynth.c src/resampler.c ${ENGINE_SRC})
+target_include_directories (edrumsynth PRIVATE src ${ENGINE}/src ${LV2_INCLUDE_DIR})
+set_source_files_properties (src/edrumsynth.c src/resampler.c tools/gen_ttl.c tests/render_test.c tests/resampler_test.c
+	PROPERTIES COMPILE_OPTIONS "-Wall;-Wextra")
+set_target_properties (edrumsynth PROPERTIES
+	PREFIX ""
+	OUTPUT_NAME edrumsynth
+	SUFFIX ".so"
+	C_VISIBILITY_PRESET hidden
+	LIBRARY_OUTPUT_DIRECTORY ${BUNDLE_DIR})
+# export only lv2_descriptor (and keep the engine's symbols to itself: the
+# test host links its own engine)
+include (CheckLinkerFlag OPTIONAL RESULT_VARIABLE HAVE_CHECK_LINKER_FLAG)
+set (EDS_VERSION_SCRIPT ${CMAKE_CURRENT_SOURCE_DIR}/src/edrumsynth.map)
+if (HAVE_CHECK_LINKER_FLAG)
+	check_linker_flag (C "-Wl,--version-script=${EDS_VERSION_SCRIPT}" HAVE_VERSION_SCRIPT)
+endif ()
+if (HAVE_VERSION_SCRIPT)
+	target_link_options (edrumsynth PRIVATE "-Wl,--version-script=${EDS_VERSION_SCRIPT}")
+	set_property (TARGET edrumsynth APPEND PROPERTY LINK_DEPENDS ${EDS_VERSION_SCRIPT})
+endif ()
+if (HAVE_CHECK_LINKER_FLAG)
+	check_linker_flag (C "-Wl,--no-undefined" HAVE_NO_UNDEFINED)
+endif ()
+if (HAVE_NO_UNDEFINED)
+	target_link_options (edrumsynth PRIVATE "-Wl,--no-undefined")
+endif ()
+if (MATH_LIBRARY)
+	target_link_libraries (edrumsynth PRIVATE ${MATH_LIBRARY})
+endif ()
+
+# the bundle in the build tree (for the tests and LV2_PATH=build)
+foreach (ttl manifest.ttl edrumsynth.ttl)
+	configure_file (${BUNDLE}/${ttl} ${BUNDLE_DIR}/${ttl} COPYONLY)
+endforeach ()
+
+install (TARGETS edrumsynth LIBRARY DESTINATION lib/lv2/${BUNDLE})
+install (FILES ${BUNDLE}/manifest.ttl ${BUNDLE}/edrumsynth.ttl DESTINATION lib/lv2/${BUNDLE})
+
 # ---- the TTL generator (desktop only) ----
 
 if (NOT CMAKE_CROSSCOMPILING)

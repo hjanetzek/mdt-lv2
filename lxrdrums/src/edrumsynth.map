@@ -1,0 +1,5 @@
+/* the plugin exports lv2_descriptor only */
+{
+	global: lv2_descriptor;
+	local: *;
+};
