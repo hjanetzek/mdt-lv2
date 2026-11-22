@@ -330,3 +330,31 @@ Where the implementation differs from or settles the plan:
   GCC inlines `fmaf` (VFPv4 has FMA) and `sqrtf` (VSQRT); on x86_64 without
   `-mfma` `fmaf` is a libm call. To check in the armv7 build's disassembly
   and on the device (steps 5, 6).
+
+## 12. Measurements on the phone (2026-11-23)
+
+Step 5 and 6, armv7 package (mdt-lv2 fc5053e, nura plugins set flags:
+`-mfpu=neon-vfpv4 -mtune=cortex-a7 -O3 -funsafe-math-optimizations`), Galaxy
+S III Neo (Cortex-A7, 1.19 GHz, performance governor), 48 kHz, 960-frame
+periods, measured by the device-testing session:
+- lv2bench (no MIDI): 2.27-2.35 µs per sample.
+- synthbench idle: 2.39 µs/sample (11.5 % of a core); all 7 voices
+  retriggered every 16th / 32nd: 2.44-2.47 µs/sample (11.7-11.9 %). About
+  2.3-2.4 ms per 20 ms period. Idle costs as much as playing: the LXR
+  engine computes every voice all the time.
+- perf (dense pattern, idle nearly the same): `mixer_calcNextSampleBlock`
+  32.8 %, `SVF_calcBlockZDF` 23.4 %, the resampler `eds_rs_process` 13.4 %,
+  `calcNextOscSampleBlock` 9.7 %, `calcNextOscSampleFmBlock` 7.3 %,
+  `mixer_limitBlock` 2.9 %, `lxr_engine_render_split` 2.1 %, memset 1 %,
+  `FxBus_process` 0.7 %. libm: only `exp` at 0.05 % (the imported expf,
+  powf, tanf, ... run on parameter changes, not per sample).
+- No crashes, xruns or denormal slowdowns.
+- In the armv7 binary `fmaf` and `sqrtf` are inlined (`vfma`, `vsqrt`;
+  `sqrtf` stays imported as GCC's errno fallback).
+
+Possible gains (engine changes in the copy, `LV2:` marks), if needed:
+skip voices whose amplitude envelope has finished (the biggest: idle is
+most of the time); per-block instead of per-sample work in the mixer (pan,
+gain, conversions); the ZDF SVF's coefficients per block; the resampler
+with fewer taps (48 → 32). Running the engine at 48 kHz would save the
+resampler but changes the sound (decision 3).
