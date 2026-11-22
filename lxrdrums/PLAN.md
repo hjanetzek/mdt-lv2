@@ -90,11 +90,15 @@ session):
    desktop hosts use their generic UIs. DPF would generate the TTL by running
    the plugin at build time, i.e. under qemu on armv7, and adds C++ and a
    GUI library for nothing here.
-2. **The engine stays in MDT** (`third-party/Synth_LXR`, read only from
-   here). The plugin is a host like the ports: `lv2/lxrdrums` has the LV2
-   wrapper, the TTL generator and the build. Engine fixes go into MDT
-   (unconditional, as CLAUDE.md says) and are picked up via the submodule.
-   CMake option `LXR_DIR` (default `../../MicroDexed-touch/third-party/Synth_LXR`).
+2. **Self-contained: the engine is copied in.** `lv2/` will become its own
+   git repository, so it doesn't build from the MicroDexed-touch submodule
+   and nobody works in MDT for it. `MicroDexed-touch/third-party/Synth_LXR`
+   (src, lxr, LICENSE, NOTICE.md, README.md) is copied to
+   `lv2/lxrdrums/engine/Synth_LXR/` unchanged, with `ORIGIN.md` naming the
+   MicroDexed-touch commit it came from. Changes the plugin needs in the
+   engine are made in the copy, marked `LV2:` and listed in `ORIGIN.md`, so
+   they can be carried back to MDT by hand later. (Code shared by several
+   plugins later moves to `lv2/common/`.)
 3. **The engine runs at 44.1 kHz; the plugin resamples** to the host rate
    (bypassed at 44100). Running the engine at the host rate would mean
    changing every per-sample rate in the firmware (envelopes, LFOs, the
@@ -152,10 +156,10 @@ session):
     package (default until then: "MDT LXR Drums"; "LXR" is an Erica Synths
     trademark, see the engine's NOTICE.md, which may argue for a name
     without it).
-12. **Packaging source**: the recipe downloads two Codeberg archives (they
-    don't include submodules): cynthian at a commit (the plugin) and the
-    MicroDexed-touch fork at the submodule's commit (the engine), and passes
-    `-DLXR_DIR=`. Needs both repos public and pushed: the user's call.
+12. **Packaging source**: one archive. Until `lv2/` has its own repository,
+    a local tarball (`tools/mktarball.sh`) for builds in the builder VM;
+    then the recipe downloads that repository's archive at a commit. Where
+    and when it is published is the user's call.
 13. **Zynthian enabling**: an `engine_config.json` default entry
     (`"JV/<name>"`, `ENABLED`, `CAT: "Percussion"`) where nura ships
     zynthian-sys' defaults; prepared as a commit, not pushed.
@@ -166,11 +170,13 @@ session):
 lv2/lxrdrums/
   PLAN.md            this file
   README.md          what it is, build, test, install
-  CMakeLists.txt     plugin, generator, tests; option LXR_DIR
+  CMakeLists.txt     plugin, generator, tests
   src/lxrdrums.c     the LV2 plugin (instantiate, connect_port, run, ...)
   src/resampler.c/h  44.1 kHz → host rate
   src/notemap.h      GM note → track
+  engine/Synth_LXR/  copy of MDT's third-party/Synth_LXR (ORIGIN.md: commit, changes)
   tools/gen_ttl.c    writes lxrdrums.ttl and manifest.ttl from the engine tables
+  tools/mktarball.sh source tarball for the recipe
   lxrdrums.lv2/      manifest.ttl, lxrdrums.ttl (generated, committed)
   tests/             render test host, TTL check, resampler test
 ```
@@ -235,18 +241,18 @@ pages and widgets on screen.
 ## 7. Packaging
 
 - `nura-builds` (a worktree on a new branch from `main`, not pushed without
-  the user's OK): `aports/lv2/lxrdrums-lv2/APKBUILD` (two archive sources,
-  `cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=None -DCMAKE_INSTALL_PREFIX=/usr
-  -DLXR_DIR=...`, `options="!check"` or ctest without the lint tools), and
+  the user's OK): `aports/lv2/lxrdrums-lv2/APKBUILD` (one archive source,
+  `cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=None -DCMAKE_INSTALL_PREFIX=/usr`,
+  `options="!check"` or ctest without the lint tools), and
   `sets/plugins.sh` `PACKAGES_armv7`.
-- Build in the builder VM; for local test builds before the archives exist,
-  the recipe may take a local tarball (`tools/mktarball.sh` packing
-  `lv2/lxrdrums` with the engine).
+- Build in the builder VM from the local tarball (`tools/mktarball.sh`)
+  until `lv2/` is published.
 - The `engine_config.json` entry (§2.13).
 
 ## 8. Steps
 
-1. Generator and TTL (stock engines), `ports.h`; lint clean.
+1. Copy the engine (`engine/Synth_LXR`, `ORIGIN.md`); generator and TTL
+   (stock engines), `ports.h`; lint clean.
 2. Plugin at 44.1 kHz: MIDI notes, control ports, render; render test bit
    exact.
 3. Resampler; 48 kHz tests; block size tests.
@@ -255,15 +261,16 @@ pages and widgets on screen.
    commit on the nura-builds branch.
 6. Phone: install, benchmark, Zynthian pages and widgets (coordinated with
    device-testing and the user).
-7. Name decided (§2.11), sources public (§2.12): final recipe, engine_config
-   entry, push with the user's OK.
+7. Name decided (§2.11), `lv2/` published (§2.12): final recipe,
+   engine_config entry, push with the user's OK.
 
 ## 9. Implementation
 
 By an agent, steps 1-5 (desktop and the VM build); steps 6-7 with the user
-and the device-testing session. Rules: CLAUDE.md (commit per milestone, MDT
-first, no pushes); engine changes only as MDT commits on `circle-port`, as
-separate commits, and reported.
+and the device-testing session. Rules: CLAUDE.md (commit per milestone, no
+pushes); nothing changes in `MicroDexed-touch/`: engine changes go into the
+copy (`LV2:` marks, listed in `ORIGIN.md`), as separate commits, and are
+reported. Everything under `lv2/` builds without anything outside it.
 
 ## 10. Later
 
@@ -273,5 +280,6 @@ separate commits, and reported.
   outputs, note map control, chromatic mode, LXR CC/NRPN option.
 - A zyngui widget (pads with trigger counts, `lxr_engine_status()`).
 - The other MDT synths (Dexed instances, MicroSynth, Braids, ePiano,
-  MultiSample, Trio / Analog, granular) the same way: their engines need
-  separating from the Teensy Audio objects first, one plan each.
+  MultiSample, Trio / Analog, granular) the same way, copied into `lv2/`:
+  their engines need separating from the Teensy Audio objects in the copy,
+  one plan each.
