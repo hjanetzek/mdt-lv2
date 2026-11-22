@@ -94,3 +94,58 @@ if (NOT CMAKE_CROSSCOMPILING)
 		COMMENT "regenerating ${BUNDLE}/*.ttl and src/ports.h in the source tree"
 		VERBATIM)
 endif ()
+
+# ---- tests ----
+
+if (EDS_TESTS AND NOT CMAKE_CROSSCOMPILING)
+	enable_testing ()
+	set (TESTS ${CMAKE_CURRENT_SOURCE_DIR}/tests)
+
+	# the TTL and ports.h as committed == regenerated; the frozen symbols
+	add_test (NAME ttl_regenerate COMMAND ${CMAKE_COMMAND}
+		-DGEN=$<TARGET_FILE:gen_ttl> -DSRC=${CMAKE_CURRENT_SOURCE_DIR} -DOUT=${CMAKE_CURRENT_BINARY_DIR}/regen
+		-P ${TESTS}/check_ttl.cmake)
+	add_test (NAME symbols_frozen COMMAND ${CMAKE_COMMAND}
+		-DGEN=$<TARGET_FILE:gen_ttl> -DFROZEN=${TESTS}/symbols.txt -DOUT=${CMAKE_CURRENT_BINARY_DIR}/symbols.txt
+		-P ${TESTS}/check_symbols.cmake)
+
+	# validation of the bundle (skipped without the tools)
+	find_program (SORD_VALIDATE sord_validate)
+	find_program (LV2_VALIDATE lv2_validate)
+	find_program (LV2LINT lv2lint)
+	# sord_validate with the LV2 specs (as lv2_validate);
+	# tests/zynthian-schema.ttl declares Zynthian's lv2:displayPriority
+	set (LV2_SPEC_DIR /usr/lib/lv2 CACHE PATH "the installed LV2 specifications (core.lv2, ...)")
+	if (SORD_VALIDATE AND EXISTS ${LV2_SPEC_DIR}/core.lv2)
+		add_test (NAME sord_validate COMMAND ${CMAKE_COMMAND}
+			-DSORD=${SORD_VALIDATE} -DSPECS=${LV2_SPEC_DIR} -DSCHEMA=${TESTS}/zynthian-schema.ttl
+			-DBUNDLE=${BUNDLE_DIR} -P ${TESTS}/check_sord.cmake)
+	endif ()
+	if (LV2_VALIDATE)
+		add_test (NAME lv2_validate COMMAND ${LV2_VALIDATE} ${TESTS}/zynthian-schema.ttl
+			${BUNDLE_DIR}/manifest.ttl ${BUNDLE_DIR}/edrumsynth.ttl)
+		set_tests_properties (lv2_validate PROPERTIES FAIL_REGULAR_EXPRESSION "error:")
+	endif ()
+	if (LV2LINT)
+		# warnings are errors (notes are not: no units, comments); online tests off
+		add_test (NAME lv2lint COMMAND ${LV2LINT} -Mpack -Ewarn -I ${BUNDLE_DIR}/ "https://codeberg.org/hjanetzek/cynthian/lv2/edrumsynth")
+		set_tests_properties (lv2lint PROPERTIES FAIL_REGULAR_EXPRESSION "\\[FAIL\\]|\\[WARN\\]")
+	endif ()
+
+	# the render test host: the plugin (dlopen) against the engine
+	add_executable (render_test tests/render_test.c ${ENGINE_SRC})
+	target_include_directories (render_test PRIVATE src ${ENGINE}/src ${LV2_INCLUDE_DIR})
+	target_link_libraries (render_test PRIVATE ${CMAKE_DL_LIBS})
+	if (MATH_LIBRARY)
+		target_link_libraries (render_test PRIVATE ${MATH_LIBRARY})
+	endif ()
+	add_dependencies (render_test edrumsynth)
+	add_test (NAME render COMMAND render_test $<TARGET_FILE:edrumsynth>)
+
+	add_executable (resampler_test tests/resampler_test.c src/resampler.c)
+	target_include_directories (resampler_test PRIVATE src)
+	if (MATH_LIBRARY)
+		target_link_libraries (resampler_test PRIVATE ${MATH_LIBRARY})
+	endif ()
+	add_test (NAME resampler COMMAND resampler_test)
+endif ()

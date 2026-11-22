@@ -1,0 +1,16 @@
+# The waiver for sord_validate / lv2_validate: Zynthian (zyngine/zynthian_lv2.py)
+# reads the display priority of ports and port groups as lv2:displayPriority
+# (the lv2core namespace; the LV2 spec defines it as port-props:displayPriority,
+# which Zynthian ignores). This declares the property so the validation passes;
+# it is not installed.
+@prefix lv2: <http://lv2plug.in/ns/lv2core#> .
+@prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix owl: <http://www.w3.org/2002/07/owl#> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+lv2:displayPriority
+	a rdf:Property , owl:DatatypeProperty ;
+	rdfs:range xsd:nonNegativeInteger ;
+	rdfs:label "display priority" ;
+	rdfs:comment "Zynthian's display priority of a port or port group (higher first)." .
