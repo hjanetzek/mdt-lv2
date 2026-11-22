@@ -8,7 +8,9 @@ own plan; this file is the roadmap and the conventions they share.
 Status (2026-11-23):
 - `lxrdrums/`: **eDrumSynth** (the LXR drum engine). Done: desktop tests,
   armv7 package, phone benchmark (12 % of a Cortex-A7 core at 48 kHz),
-  recipe handed to nura-builds CI. Plan: `lxrdrums/PLAN.md`.
+  published by nura's CI for armv7, aarch64 and x86_64
+  (`edrumsynth-lv2-0.0.1_git20261123-r0`, enabled by default in Zynthian via
+  zynthian-sys-config r3). Plan: `lxrdrums/PLAN.md`.
 - Next: §3.
 
 ## 1. What MDT has, and what is worth porting
