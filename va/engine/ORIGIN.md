@@ -41,12 +41,17 @@ can be carried back to MDT by hand. None changes the sound at 44.1 kHz.
    as `trio_render()` does), so pitch bend between 1/16 semitone steps
    reaches both oscillators; without bend `fine` is 0, as MDT's
    `cents_inc(..., det, 0)`.
+4. `trio_engine.cpp`, `analog_engine.cpp`: `y * 2` instead of `y << 1` for
+   the filtered sample (a left shift of a negative value is undefined in
+   C++ before C++20; UBSan found it in the render test). The same result on
+   every target.
 
 Everything else is unchanged; in particular MDT's behaviour where it may
 look unintended:
 - Analog's key tracking (`KTR`, `P_E7`) uses `v->pitch16`, which MDT's
   wrapper never sets (it stays 0): KTR lowers the cutoff by a fixed
-  `KTR * 60 / 16` index steps instead of following the key. The presets were
+  `KTR * 60 / 256` filter index steps (15 at KTR 64) instead of following
+  the key. The presets were
   voiced with that, so it stays (see `va/PLAN.md`).
 - The sustain level saturates at 50 (`sus * ENV_MAX / 50` in the wrapper's
   `set_env`, reimplemented in `va/src/voice.h`), the editor goes to 127.

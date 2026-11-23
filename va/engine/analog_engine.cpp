@@ -71,7 +71,7 @@ void analog_render(track_t *t, voice_t *v, int32_t *out, uint32_t n, const vmod_
                 aa = 16000 + (softclip((aa - 16000) * 2) >> 1);
                 y = y < 0 ? -aa : aa;
             }
-            s = y << 1;
+            s = y * 2;   /* LV2: * 2 (MDT: y << 1, undefined for negative y before C++20) */
         }
         out[i] += voice_amp(s, m, i);
     }

@@ -271,7 +271,7 @@ void trio_render(track_t *t, voice_t *v, int32_t *out, uint32_t n, const vmod_t 
         ic1 = a + ((ic1 - a) >> 2);
 
         y = soft_knee((x * ma + v1 * mb + v2 * mc) >> 10, 16000);
-        out[i] += voice_amp(y << 1, m, i);
+        out[i] += voice_amp(y * 2, m, i);   /* LV2: * 2 (MDT: y << 1, undefined for negative y before C++20) */
     }
     prev = cur + cr[n];
 
