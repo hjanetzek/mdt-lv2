@@ -126,15 +126,15 @@ if (EDS_TESTS AND NOT CMAKE_CROSSCOMPILING)
 	find_program (LV2_VALIDATE lv2_validate)
 	find_program (LV2LINT lv2lint)
 	# sord_validate with the LV2 specs (as lv2_validate);
-	# tests/zynthian-schema.ttl declares Zynthian's lv2:displayPriority
+	# common/zynthian-schema.ttl declares Zynthian's lv2:displayPriority
 	set (LV2_SPEC_DIR /usr/lib/lv2 CACHE PATH "the installed LV2 specifications (core.lv2, ...)")
 	if (SORD_VALIDATE AND EXISTS ${LV2_SPEC_DIR}/core.lv2)
 		add_test (NAME sord_validate COMMAND ${CMAKE_COMMAND}
-			-DSORD=${SORD_VALIDATE} -DSPECS=${LV2_SPEC_DIR} -DSCHEMA=${TESTS}/zynthian-schema.ttl
+			-DSORD=${SORD_VALIDATE} -DSPECS=${LV2_SPEC_DIR} -DSCHEMA=${COMMON}/zynthian-schema.ttl
 			-DBUNDLE=${BUNDLE_DIR} -P ${TESTS}/check_sord.cmake)
 	endif ()
 	if (LV2_VALIDATE)
-		add_test (NAME lv2_validate COMMAND ${LV2_VALIDATE} ${TESTS}/zynthian-schema.ttl
+		add_test (NAME lv2_validate COMMAND ${LV2_VALIDATE} ${COMMON}/zynthian-schema.ttl
 			${BUNDLE_DIR}/manifest.ttl ${BUNDLE_DIR}/edrumsynth.ttl)
 		set_tests_properties (lv2_validate PROPERTIES FAIL_REGULAR_EXPRESSION "error:")
 	endif ()

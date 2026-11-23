@@ -2,7 +2,8 @@
 # reads the display priority of ports and port groups as lv2:displayPriority
 # (the lv2core namespace; the LV2 spec defines it as port-props:displayPriority,
 # which Zynthian ignores). This declares the property so the validation passes;
-# it is not installed.
+# it is not installed. Shared by the plugins of mdt-lv2 (their sord_validate and
+# lv2_validate tests).
 @prefix lv2: <http://lv2plug.in/ns/lv2core#> .
 @prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
 @prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .

@@ -113,3 +113,73 @@ if (NOT CMAKE_CROSSCOMPILING)
 		VERBATIM)
 endif ()
 
+# ---- tests ----
+
+if (VA_TESTS AND NOT CMAKE_CROSSCOMPILING)
+	enable_testing ()
+	set (TESTS ${CMAKE_CURRENT_SOURCE_DIR}/tests)
+
+	# the TTL and ports headers as committed == regenerated
+	add_test (NAME ttl_regenerate COMMAND ${CMAKE_COMMAND}
+		-DGEN=$<TARGET_FILE:gen_ttl> -DSRC=${CMAKE_CURRENT_SOURCE_DIR} -DOUT=${CMAKE_CURRENT_BINARY_DIR}/regen
+		-P ${TESTS}/check_ttl.cmake)
+
+	# validation of the bundles (skipped without the tools);
+	# common/zynthian-schema.ttl declares Zynthian's lv2:displayPriority
+	find_program (SORD_VALIDATE sord_validate)
+	find_program (LV2_VALIDATE lv2_validate)
+	find_program (LV2LINT lv2lint)
+	find_program (NM_PROGRAM NAMES ${CMAKE_NM} nm)
+	set (LV2_SPEC_DIR /usr/lib/lv2 CACHE PATH "the installed LV2 specifications (core.lv2, ...)")
+	foreach (synth trio analog)
+		set (name m${synth})
+		set (bundle_dir ${CMAKE_CURRENT_BINARY_DIR}/${name}.lv2)
+		set (uri "https://github.com/hjanetzek/mdt-lv2/${name}")
+
+		add_test (NAME symbols_frozen_${name} COMMAND ${CMAKE_COMMAND}
+			-DGEN=$<TARGET_FILE:gen_ttl> -DSYNTH=${synth} -DFROZEN=${TESTS}/symbols_${name}.txt
+			-DOUT=${CMAKE_CURRENT_BINARY_DIR}/symbols_${name}.txt -P ${TESTS}/check_symbols.cmake)
+
+		if (SORD_VALIDATE AND EXISTS ${LV2_SPEC_DIR}/core.lv2)
+			add_test (NAME sord_validate_${name} COMMAND ${CMAKE_COMMAND}
+				-DSORD=${SORD_VALIDATE} -DSPECS=${LV2_SPEC_DIR} -DSCHEMA=${COMMON}/zynthian-schema.ttl
+				-DBUNDLE=${bundle_dir} -DNAME=${name} -P ${TESTS}/check_sord.cmake)
+		endif ()
+		if (LV2_VALIDATE)
+			add_test (NAME lv2_validate_${name} COMMAND ${LV2_VALIDATE} ${COMMON}/zynthian-schema.ttl
+				${bundle_dir}/manifest.ttl ${bundle_dir}/${name}.ttl ${bundle_dir}/presets.ttl)
+			set_tests_properties (lv2_validate_${name} PROPERTIES FAIL_REGULAR_EXPRESSION "error:")
+		endif ()
+		if (LV2LINT)
+			# warnings are errors (notes are not); online tests off
+			add_test (NAME lv2lint_${name} COMMAND ${LV2LINT} -Mpack -Ewarn -I ${bundle_dir}/ ${uri})
+			set_tests_properties (lv2lint_${name} PROPERTIES FAIL_REGULAR_EXPRESSION "\\[FAIL\\]|\\[WARN\\]")
+		endif ()
+
+		if (NM_PROGRAM)
+			add_test (NAME imports_${name} COMMAND ${CMAKE_COMMAND}
+				-DNM=${NM_PROGRAM} -DPLUGIN=$<TARGET_FILE:${name}> -P ${TESTS}/check_imports.cmake)
+		endif ()
+
+		# the render test host: the plugin (dlopen) against MDT's
+		# wrapper, allocation and mixer driving the copied engine
+		if (synth STREQUAL "analog")
+			set (analog 1)
+			set (engine_src ${ENGINE_ANALOG})
+		else ()
+			set (analog 0)
+			set (engine_src ${ENGINE_TRIO})
+		endif ()
+		add_executable (render_test_${name} tests/render_test.cpp ${COMMON}/testhost/testhost.c
+			${ENGINE_TRIO} ${ENGINE_ANALOG} ${ENGINE_COMMON})
+		target_include_directories (render_test_${name} PRIVATE src tools ${ENGINE} ${COMMON}/testhost ${LV2_INCLUDE_DIR})
+		target_compile_definitions (render_test_${name} PRIVATE VA_ANALOG=${analog} VA_PORTS="ports_${name}.h")
+		target_compile_options (render_test_${name} PRIVATE ${WARNINGS})
+		target_link_libraries (render_test_${name} PRIVATE ${CMAKE_DL_LIBS})
+		if (MATH_LIBRARY)
+			target_link_libraries (render_test_${name} PRIVATE ${MATH_LIBRARY})
+		endif ()
+		add_dependencies (render_test_${name} ${name})
+		add_test (NAME render_${name} COMMAND render_test_${name} $<TARGET_FILE:${name}>)
+	endforeach ()
+endif ()

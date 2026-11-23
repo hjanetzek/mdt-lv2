@@ -85,7 +85,7 @@ each 11 pages, then FX Bus and Master: 49 groups, 70 pages. The list:
   gain; delay: time, range, tone, feedback): their `rdfs:comment` says it.
 - `lv2:displayPriority` is in the lv2core namespace because Zynthian reads it
   there (the spec's is `port-props:displayPriority`);
-  `tests/zynthian-schema.ttl` declares it for the validators.
+  `../common/zynthian-schema.ttl` declares it for the validators.
 - Not exposed in v1: the slots' engine selection (stock engines only), kit
   morph, the LO / HI outputs, parameters without a name in the menus.
 
@@ -127,7 +127,7 @@ Tests (`ctest`; the validators are skipped when not installed):
   `cmake --build build --target regenerate`.
 - `symbols_frozen`: every symbol in `tests/symbols.txt` still exists.
 - `sord_validate`, `lv2_validate`: the bundle against the LV2 specs (with
-  `tests/zynthian-schema.ttl`).
+  `../common/zynthian-schema.ttl`).
 - `lv2lint`: warnings are errors (notes remain: no units, no port comments,
   version 0.x).
 - `render`: a minimal host (`tests/render_test.c` on

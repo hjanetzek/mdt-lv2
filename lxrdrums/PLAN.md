@@ -293,7 +293,7 @@ Where the implementation differs from or settles the plan:
 - `lv2:displayPriority` is written in the lv2core namespace, as Zynthian
   reads it (`world.ns.lv2.displayPriority`); the spec's property is
   `port-props:displayPriority`. The validators get it declared by
-  `tests/zynthian-schema.ttl` (not installed): the documented waiver.
+  `../common/zynthian-schema.ttl` (not installed): the documented waiver.
 - Port symbols and names come from a naming table in `gen_ttl.c` (by group,
   the engine's category and long name), not from the engine's 8-character
   display names ("Frequncy", "Resnance"); unknown parameters stop the

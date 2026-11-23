@@ -1,0 +1,21 @@
+# mTrio control port symbols: API (presets, snapshots, MIDI learn).
+# Never remove or rename one; new ones are added here when released.
+osc_wave
+osc_interval2
+osc_interval3
+osc_detune
+filter_cutoff
+filter_resonance
+filter_mode
+ampeg_attack
+ampeg_decay
+ampeg_sustain
+ampeg_release
+mod_pw
+mod_env_pw
+mod_env_cutoff
+mod_velocity
+master_level
+master_pan
+master_transpose
+master_bend_range
