@@ -13,8 +13,6 @@
 cmake_minimum_required (VERSION 3.16)
 project (mdt-va VERSION 0.0.1 LANGUAGES C CXX)
 
-# (the generator and the TTL; the plugins follow)
-
 option (VA_TESTS "build the tests (ctest)" ON)
 
 set (CMAKE_C_STANDARD 17)
@@ -41,6 +39,63 @@ set (ENGINE_TRIO ${ENGINE}/trio_engine.cpp)
 set (ENGINE_ANALOG ${ENGINE}/analog_engine.cpp)
 set (WARNINGS -Wall -Wextra)
 
+# the plugins: C style C++ (the engine is C++), no exceptions, no RTTI;
+# --as-needed drops libstdc++ (nothing uses it)
+include (CheckLinkerFlag OPTIONAL RESULT_VARIABLE HAVE_CHECK_LINKER_FLAG)
+set (VA_VERSION_SCRIPT ${CMAKE_CURRENT_SOURCE_DIR}/src/va.map)
+if (HAVE_CHECK_LINKER_FLAG)
+	check_linker_flag (CXX "-Wl,--version-script=${VA_VERSION_SCRIPT}" HAVE_VERSION_SCRIPT)
+	check_linker_flag (CXX "-Wl,--no-undefined" HAVE_NO_UNDEFINED)
+	check_linker_flag (CXX "-Wl,--as-needed" HAVE_AS_NEEDED)
+endif ()
+
+set (BUNDLES)
+foreach (synth mtrio manalog)
+	if (synth STREQUAL "manalog")
+		set (analog 1)
+		set (engine_src ${ENGINE_ANALOG})
+	else ()
+		set (analog 0)
+		set (engine_src ${ENGINE_TRIO})
+	endif ()
+	set (bundle_dir ${CMAKE_CURRENT_BINARY_DIR}/${synth}.lv2)
+	add_library (${synth} MODULE src/va.cpp ${engine_src} ${ENGINE_COMMON})
+	target_include_directories (${synth} PRIVATE src ${ENGINE} ${LV2_INCLUDE_DIR})
+	target_compile_definitions (${synth} PRIVATE VA_ANALOG=${analog} VA_PORTS="ports_${synth}.h")
+	target_compile_options (${synth} PRIVATE -fno-exceptions -fno-rtti)
+	set_source_files_properties (src/va.cpp PROPERTIES COMPILE_OPTIONS "${WARNINGS}")
+	set_target_properties (${synth} PROPERTIES
+		PREFIX ""
+		OUTPUT_NAME ${synth}
+		SUFFIX ".so"
+		C_VISIBILITY_PRESET hidden
+		CXX_VISIBILITY_PRESET hidden
+		LIBRARY_OUTPUT_DIRECTORY ${bundle_dir})
+	if (HAVE_VERSION_SCRIPT)
+		target_link_options (${synth} PRIVATE "-Wl,--version-script=${VA_VERSION_SCRIPT}")
+		set_property (TARGET ${synth} APPEND PROPERTY LINK_DEPENDS ${VA_VERSION_SCRIPT})
+	endif ()
+	if (HAVE_NO_UNDEFINED)
+		target_link_options (${synth} PRIVATE "-Wl,--no-undefined")
+	endif ()
+	if (HAVE_AS_NEEDED)
+		target_link_options (${synth} PRIVATE "-Wl,--as-needed")
+	endif ()
+	if (MATH_LIBRARY)
+		target_link_libraries (${synth} PRIVATE ${MATH_LIBRARY})
+	endif ()
+
+	# the bundle in the build tree (for the tests and LV2_PATH=build)
+	foreach (ttl manifest.ttl ${synth}.ttl presets.ttl)
+		configure_file (${synth}.lv2/${ttl} ${bundle_dir}/${ttl} COPYONLY)
+	endforeach ()
+
+	install (TARGETS ${synth} LIBRARY DESTINATION lib/lv2/${synth}.lv2)
+	install (FILES ${synth}.lv2/manifest.ttl ${synth}.lv2/${synth}.ttl ${synth}.lv2/presets.ttl
+		DESTINATION lib/lv2/${synth}.lv2)
+endforeach ()
+set_source_files_properties (${ENGINE_COMMON} ${ENGINE_TRIO} ${ENGINE_ANALOG} PROPERTIES COMPILE_OPTIONS "${WARNINGS}")
+
 # ---- the TTL generator (desktop only) ----
 
 if (NOT CMAKE_CROSSCOMPILING)
@@ -57,3 +112,4 @@ if (NOT CMAKE_CROSSCOMPILING)
 		COMMENT "regenerating mtrio.lv2/*.ttl, manalog.lv2/*.ttl and src/ports_*.h in the source tree"
 		VERBATIM)
 endif ()
+
