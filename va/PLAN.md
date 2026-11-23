@@ -235,6 +235,24 @@ it reaches 0, events start at a block.)
 On the phone (to do, step 6): expect a fraction of eDrumSynth's 2.3 µs /
 sample: no resampler, idle voices skipped, eight voices of integer DSP.
 
+## 7a. Measurements on the phone (2026-11-23)
+
+armv7 package (mdt-lv2 c25cd61, nura plugins set flags, NEON with fused
+MAC), Galaxy S III Neo (Cortex-A7), 48 kHz, 960-frame periods, measured by
+the device-testing session with zynthian running in the background:
+- lv2bench (no notes): mTrio 0.013-0.033, mAnalog 0.012-0.013 µs per sample
+  (about 0.06 % of a core).
+- jalv + MIDI, the whole jalv process (with jalv's and JACK's overhead),
+  mTrio / mAnalog: idle 0.174 / 0.208 µs/sample (0.8 / 1.0 %), 4-note
+  chords 0.208 / 0.191 (1.0 / 0.9 %), 8 notes held 0.191 / 0.174
+  (0.9 / 0.8 %): within the noise of jalv's own cost.
+- perf, 8 notes held, default preset: the plugin is 21 % (mTrio) / 14 %
+  (mAnalog) of the jalv process, i.e. about 0.17 % / 0.12 % of a core; the
+  rest is libjack, musl's memcpy and the kernel. 50-100 times cheaper than
+  eDrumSynth; nothing to optimise.
+- No crashes or errors. Heavier presets not measured (zynthian's jalv
+  can't load a preset URI from the command line).
+
 ## 8. Open
 
 - armv7 / aarch64 package builds in nura's CI and the phone tests
