@@ -28,7 +28,10 @@ extern int16_t TANH_Q15[TANH_N + 1];
  * 24000 = one voice peaks near -6 dBFS before the master mixer. */
 #define VOICE_FS  24000
 
-void dsp_basics_init(void);
+/* LV2: the sample rate as a parameter (MDT: void, 44.1 kHz). Builds the
+ * tables; SVF_G and pitch_inc() depend on the rate: global state, one rate
+ * per process at a time */
+void dsp_basics_init(double rate);
 
 static inline int32_t clamp(int32_t v, int32_t lo, int32_t hi) {
     return v < lo ? lo : v > hi ? hi : v;

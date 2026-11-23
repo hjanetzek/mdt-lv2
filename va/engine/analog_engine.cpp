@@ -28,7 +28,12 @@ void analog_render(track_t *t, voice_t *v, int32_t *out, uint32_t n, const vmod_
     tsvf_t flt;
     int32_t drive = 32768 + p[P_E6] * 512;                  /* 1x .. 3x */
     uint32_t inc1 = m->inc;
-    uint32_t inc2 = det ? cents_inc(m->pitch16, det, 0) : inc1;
+    /* LV2: a fine offset of m->inc from the note's pitch (pitch bend
+     * between 1/16 semitone steps) also for the detuned oscillator, as
+     * trio_render() does; 0 without bend (MDT: cents_inc(..., det, 0)) */
+    uint32_t base = pitch_inc(m->pitch16);
+    int32_t fine = (base >> 12) ? (int32_t)(m->inc - base) / (int32_t)(base >> 12) : 0;
+    uint32_t inc2 = det ? cents_inc(m->pitch16, det, fine) : inc1;
 
     /* Pulse width (PWM wave, #4): 50 % base + envelope sweep.
      * m.shape contains (64 << 8) + modulation from the wrapper. Adding

@@ -3,7 +3,7 @@
 #include "dsp_basics.h"
 #include <math.h>
 #include <string.h>
-#include "config.h"
+/* LV2: no config.h (MDT's; only for DMAMEM) */
 
 // int32_t SINE[SINE_N + 1];
 // int32_t SVF_G[SVF_G_N + 1];
@@ -11,20 +11,37 @@
 // static int32_t POW2_16[192];
 // int32_t CUT_PARAM_TO_IDX[128];
 
-int32_t SINE[SINE_N + 1]       DMAMEM;
-int32_t SVF_G[SVF_G_N + 1]     DMAMEM;
-int16_t TANH_Q15[TANH_N + 1]   DMAMEM;
-static int32_t POW2_16[192]    DMAMEM;
-int32_t CUT_PARAM_TO_IDX[128]  DMAMEM;
+/* LV2: without DMAMEM (a Teensy memory section) */
+int32_t SINE[SINE_N + 1];
+int32_t SVF_G[SVF_G_N + 1];
+int16_t TANH_Q15[TANH_N + 1];
+static int32_t POW2_16[192];
+int32_t CUT_PARAM_TO_IDX[128];
+/* LV2: the phase increment of A4 (440 Hz) at the sample rate, set by
+ * dsp_basics_init() (MDT: 440 * 2^32 / 44100 in pitch_inc()) */
+static uint64_t PITCH_BASE = 440ULL * 4294967296ULL / 44100ULL;
 
-void dsp_basics_init(void) {
+/* LV2: the sample rate is a parameter (MDT: 44100 in the SVF_G table and
+ * pitch_inc()); dsp_basics_init(44100) builds MDT's tables */
+void dsp_basics_init(double rate) {
+    /* LV2: the increment as MDT's integer division at integer rates */
+    if (rate == (double)(uint64_t)rate)
+        PITCH_BASE = 440ULL * 4294967296ULL / (uint64_t)rate;
+    else
+        PITCH_BASE = (uint64_t)(440.0 * 4294967296.0 / rate);
+
     for (int i = 0; i <= SINE_N; i++)
         SINE[i] = (int32_t)(sin(2.0 * M_PI * i / (double)SINE_N) * 32767.0 + 0.5);
 
     for (int i = 0; i <= SVF_G_N; i++) {
         double t  = (double)i / (double)SVF_G_N;
         double fc = 30.0 * pow(16000.0 / 30.0, t);
-        double g  = tan(M_PI * fc / 44100.0);
+        /* LV2: the host rate; at rates below 35.6 kHz the top of the
+         * table (16 kHz) is limited to 0.45 of the rate (tan() would pass
+         * its pole at the Nyquist frequency) */
+        if (fc > 0.45 * rate)
+            fc = 0.45 * rate;
+        double g  = tan(M_PI * fc / rate);
         SVF_G[i]  = (int32_t)(g * 4096.0 + 0.5);
     }
 
@@ -71,7 +88,7 @@ uint32_t pitch_inc(int32_t p16) {
     int32_t e   = p16 - 1104;
     int32_t oct = e >= 0 ? e / 192 : (e - 191) / 192;
     int32_t rem = e - oct * 192;
-    uint64_t base = 440ULL * 4294967296ULL / 44100ULL;
+    uint64_t base = PITCH_BASE;   /* LV2: the host rate's (MDT: 440 * 2^32 / 44100) */
     uint64_t inc  = (base * (uint64_t)POW2_16[rem]) >> 16;
     if (oct >= 0) return (uint32_t)(inc << oct);
     return (uint32_t)(inc >> (-oct));
