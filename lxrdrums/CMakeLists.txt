@@ -27,6 +27,9 @@ if (NOT LV2_INCLUDE_DIR)
 endif ()
 find_library (MATH_LIBRARY m)
 
+# common/ (shared with the other plugins of mdt-lv2): the TTL helpers of the
+# generator and the render test host
+set (COMMON ${CMAKE_CURRENT_SOURCE_DIR}/../common)
 set (ENGINE ${CMAKE_CURRENT_SOURCE_DIR}/engine/Synth_LXR)
 set (ENGINE_SRC ${ENGINE}/src/lxr_engine.c)
 set (BUNDLE edrumsynth.lv2)
@@ -51,6 +54,7 @@ set_source_files_properties (${ENGINE_SRC} PROPERTIES
 add_library (edrumsynth MODULE src/edrumsynth.c src/resampler.c ${ENGINE_SRC})
 target_include_directories (edrumsynth PRIVATE src ${ENGINE}/src ${LV2_INCLUDE_DIR})
 set_source_files_properties (src/edrumsynth.c src/resampler.c tools/gen_ttl.c tests/render_test.c tests/resampler_test.c
+	${COMMON}/testhost/testhost.c
 	PROPERTIES COMPILE_OPTIONS "-Wall;-Wextra")
 set_target_properties (edrumsynth PROPERTIES
 	PREFIX ""
@@ -91,7 +95,7 @@ install (FILES ${BUNDLE}/manifest.ttl ${BUNDLE}/edrumsynth.ttl DESTINATION lib/l
 
 if (NOT CMAKE_CROSSCOMPILING)
 	add_executable (gen_ttl tools/gen_ttl.c ${ENGINE_SRC})
-	target_include_directories (gen_ttl PRIVATE ${ENGINE}/src ${ENGINE}/lxr ${ENGINE}/lxr/shim)
+	target_include_directories (gen_ttl PRIVATE ${COMMON} ${ENGINE}/src ${ENGINE}/lxr ${ENGINE}/lxr/shim)
 	if (MATH_LIBRARY)
 		target_link_libraries (gen_ttl PRIVATE ${MATH_LIBRARY})
 	endif ()
@@ -141,8 +145,8 @@ if (EDS_TESTS AND NOT CMAKE_CROSSCOMPILING)
 	endif ()
 
 	# the render test host: the plugin (dlopen) against the engine
-	add_executable (render_test tests/render_test.c ${ENGINE_SRC})
-	target_include_directories (render_test PRIVATE src ${ENGINE}/src ${LV2_INCLUDE_DIR})
+	add_executable (render_test tests/render_test.c ${COMMON}/testhost/testhost.c ${ENGINE_SRC})
+	target_include_directories (render_test PRIVATE src ${COMMON}/testhost ${ENGINE}/src ${LV2_INCLUDE_DIR})
 	target_link_libraries (render_test PRIVATE ${CMAKE_DL_LIBS})
 	if (MATH_LIBRARY)
 		target_link_libraries (render_test PRIVATE ${MATH_LIBRARY})

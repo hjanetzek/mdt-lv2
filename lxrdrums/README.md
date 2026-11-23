@@ -104,7 +104,9 @@ sets an engine parameter only when its port's rounded value changed.
 
 Needs a C compiler, CMake (3.16 or newer), Ninja or make and the LV2
 headers (`lv2-dev`). Everything else is in this directory (the engine is a
-copy: `engine/Synth_LXR/ORIGIN.md`).
+copy: `engine/Synth_LXR/ORIGIN.md`) and in `../common` (the generator's TTL
+helpers `ttl.h` and the render test host `testhost/`, shared with the other
+plugins of this repository).
 
 ```
 cmake -B build -G Ninja
@@ -128,8 +130,8 @@ Tests (`ctest`; the validators are skipped when not installed):
   `tests/zynthian-schema.ttl`).
 - `lv2lint`: warnings are errors (notes remain: no units, no port comments,
   version 0.x).
-- `render`: a minimal host (`tests/render_test.c`: dlopen +
-  `lv2_descriptor`, urid:map, no lilv). At 44.1 kHz the plugin equals the
+- `render`: a minimal host (`tests/render_test.c` on
+  `../common/testhost`: dlopen + `lv2_descriptor`, urid:map, no lilv). At 44.1 kHz the plugin equals the
   engine driven directly (bit exact) for host blocks of 1 to 4096 frames; at
   48 kHz blocks of 1, 64, 333, 480, 960, 1001 and 4096 frames give the same
   signal, no NaN or clipping; the bass drum's pitch and level at 22.05 to
@@ -143,8 +145,8 @@ The tests don't run jalv or anything that creates a JACK client.
 ## Packaging
 
 `tools/mktarball.sh [--worktree] [OUTDIR]` writes
-`edrumsynth-VERSION.tar.gz` (HEAD, or the working tree) and its sha512sum
-line; `packaging/APKBUILD` is the draft recipe for nura-builds
+`edrumsynth-VERSION.tar.gz` (HEAD, or the working tree; `lxrdrums/` and
+`common/`) and its sha512sum line; `packaging/APKBUILD` is the draft recipe for nura-builds
 (`aports/lv2/edrumsynth-lv2/`, `arch="all"`, CMake, ctest in `check()`).
 
 ## Open decisions

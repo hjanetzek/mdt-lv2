@@ -6,8 +6,9 @@
 #   tools/mktarball.sh [OUTDIR]            HEAD (committed files only)
 #   tools/mktarball.sh --worktree [OUTDIR] the working tree as it is
 #
-# Writes OUTDIR/edrumsynth-VERSION.tar.gz (top directory edrumsynth-VERSION/,
-# the contents of lxrdrums/) and prints its sha512sum line for the recipe.
+# Writes OUTDIR/edrumsynth-VERSION.tar.gz (top directory edrumsynth-VERSION/
+# with lxrdrums/ and common/, which it uses; the recipe builds in
+# edrumsynth-VERSION/lxrdrums) and prints its sha512sum line for the recipe.
 # VERSION: the CMake project version.
 set -eu
 
@@ -31,12 +32,11 @@ if [ $worktree = 1 ]; then
 	tmp=$(mktemp -d)
 	trap 'rm -rf "$tmp"' EXIT
 	mkdir "$tmp/$name"
-	(cd "$here" && git ls-files -co --exclude-standard . | tar -cf - -T -) | tar -xf - -C "$tmp/$name"
+	(cd "$here/.." && git ls-files -co --exclude-standard lxrdrums common | tar -cf - -T -) | tar -xf - -C "$tmp/$name"
 	tar -C "$tmp" --sort=name --owner=0 --group=0 --numeric-owner --mtime=@0 -czf "$tarball" "$name"
 else
 	top=$(git -C "$here" rev-parse --show-toplevel)
-	sub=$(git -C "$here" rev-parse --show-prefix)
-	git -C "$top" archive --format=tar.gz --prefix="$name/" "HEAD:${sub%/}" > "$tarball"
+	git -C "$top" archive --format=tar.gz --prefix="$name/" HEAD lxrdrums common > "$tarball"
 	echo "commit $(git -C "$top" rev-parse --short HEAD)" >&2
 fi
 echo "$tarball" >&2

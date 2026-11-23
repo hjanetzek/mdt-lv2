@@ -14,7 +14,7 @@ arch="all"
 license="GPL-3.0-only"
 makedepends="cmake samurai lv2-dev"
 source="edrumsynth-$pkgver.tar.gz"
-builddir="$srcdir/edrumsynth-$pkgver"
+builddir="$srcdir/edrumsynth-$pkgver/lxrdrums"	# it uses ../common
 
 build() {
 	cmake -B build -G Ninja \
