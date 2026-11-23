@@ -5,7 +5,9 @@
 # inlined, runs when the level changes) (-DNM -DPLUGIN)
 set (allowed calloc free memcpy memset memmove strcmp pow sin tan tanh exp2 sqrtf sqrt vfprintf fprintf stderr
 	__stack_chk_fail __stack_chk_guard __cxa_finalize __gmon_start__ _ITM_deregisterTMCloneTable
-	_ITM_registerTMCloneTable __errno_location __memcpy_chk __memset_chk __vfprintf_chk __fprintf_chk)
+	_ITM_registerTMCloneTable __errno_location __memcpy_chk __memset_chk __vfprintf_chk __fprintf_chk
+	# crtbegin's weak EH frame registration (32-bit ARM GCC)
+	__register_frame_info __deregister_frame_info)
 # the compiler's run-time helpers (32-bit ARM: __aeabi_*, divisions, ...)
 set (allowed_regex "^(__aeabi_|__gnu_|__udiv|__div|__mod|__umod)")
 execute_process (COMMAND ${NM} -D --undefined-only ${PLUGIN} OUTPUT_VARIABLE out RESULT_VARIABLE rc)
