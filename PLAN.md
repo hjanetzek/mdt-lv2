@@ -106,8 +106,12 @@ two users before it becomes shared:
 
 ## 4. Order
 
-1. **Trio and Analog** (one directory `va/`, two plugins in one bundle or
-   two bundles; shared `synth_shared.h` / `dsp_basics`):
+1. **Trio and Analog: mTrio and mAnalog** (decided 2026-11-23): one
+   directory `va/` (shared `synth_shared.h` / `dsp_basics`), two bundles
+   `mtrio.lv2` / `manalog.lv2`, `doap:name` "mTrio" / "mAnalog" (Zynthian
+   keys `JV/mTrio`, `JV/mAnalog`), URIs
+   `https://github.com/hjanetzek/mdt-lv2/mtrio` / `.../manalog`, one nura
+   package `mdt-va-lv2`:
    - engine copied; the `dsp_basics` tables (built with 44100 in
      `dsp_basics.cpp`, the `tan(...)/44100` and pitch increments) and
      `synth_trio.cpp`'s 44100 made a run-time rate, so no resampler;
@@ -118,9 +122,9 @@ two users before it becomes shared:
      ADSR and cutoff / resonance designations;
    - presets: the built-in `TRIO_PRESETS` (5) and `ANALOG_PRESETS` (12) as
      LV2 presets;
-   - MDT ignores velocity and pitch bend for both; v1 adds pitch bend (±2
-     semitones, CC-free) and a velocity → level / cutoff amount port (default
-     0, MDT's behaviour). Mod wheel (CC1) → LFO / cutoff amount later.
+   - MDT ignores velocity and pitch bend for both; v1 adds (decided) pitch
+     bend (±2 semitones, a range port) and a velocity amount port (velocity →
+     level and cutoff, default 0 = MDT's sound). Mod wheel (CC1) later.
    - Effort: about eDrumSynth's, minus the resampler and the parameter-table
      complexity.
 2. **eDrumSynth optimisations** if the phone needs them (idle voices,
@@ -147,9 +151,4 @@ synth later).
 
 ## 5. Decisions needed from the user
 
-- Names (`doap:name`, the Zynthian engine key) for the Trio and Analog
-  plugins, and whether they are two plugins in one bundle (`va/`) or two
-  directories.
-- Whether v1 adds pitch bend / velocity to Trio and Analog (default above:
-  yes, with velocity amount 0 = MDT's sound) or stays exactly MDT.
 - Ambient Garden's design questions (§4.3), when it is next.
