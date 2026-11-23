@@ -1,0 +1,41 @@
+# Contributor: Hannes Janetzek <hannes.janetzek@gmail.com>
+# DRAFT for nura-builds aports/lv2/mdt-va-lv2/APKBUILD (not there yet).
+# mTrio and mAnalog: MicroDexed-touch's Trio and Analog synths as LV2
+# instruments (URIs https://github.com/hjanetzek/mdt-lv2/mtrio, .../manalog);
+# Zynthian engine keys "JV/mTrio", "JV/mAnalog". The plugins are va/ in the
+# mdt-lv2 repository (it uses ../common). _commit: the published commit to
+# build (as edrumsynth-lv2); for a local build of an unpublished state use
+# va/tools/mktarball.sh and builddir="$srcdir/mdt-va-lv2-$pkgver/va".
+# No ARM flags here: they come from the build.
+pkgname=mdt-va-lv2
+_commit=0000000000000000000000000000000000000000
+pkgver=0.0.1_git20261123
+pkgrel=0
+pkgdesc="mTrio and mAnalog: MicroDexed-touch's Trio and Analog synths as LV2 instruments"
+url="https://github.com/hjanetzek/mdt-lv2"
+arch="all"
+license="GPL-3.0-only"
+makedepends="cmake samurai lv2-dev"
+source="$pkgname-$_commit.tar.gz::https://github.com/hjanetzek/mdt-lv2/archive/$_commit.tar.gz"
+builddir="$srcdir/mdt-lv2-$_commit/va"
+
+build() {
+	cmake -B build -G Ninja \
+		-DCMAKE_BUILD_TYPE=None \
+		-DCMAKE_INSTALL_PREFIX=/usr
+	cmake --build build
+}
+
+check() {
+	# the generator, render and import tests; the TTL validators
+	# (lv2lint, sord_validate, lv2_validate) run only where installed
+	ctest --test-dir build --output-on-failure
+}
+
+package() {
+	DESTDIR="$pkgdir" cmake --install build
+}
+# abuild checksum, once _commit is set
+sha512sums="
+00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000  mdt-va-lv2-0000000000000000000000000000000000000000.tar.gz
+"

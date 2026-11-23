@@ -11,7 +11,12 @@ Status (2026-11-23):
   published by nura's CI for armv7, aarch64 and x86_64
   (`edrumsynth-lv2-0.0.1_git20261123-r0`, enabled by default in Zynthian via
   zynthian-sys-config r3). Plan: `lxrdrums/PLAN.md`.
-- Next: §3.
+- `va/`: **mTrio** and **mAnalog** (MDT's Trio and Analog synths, §4.1).
+  Done: desktop build and tests (bit exact against MDT at 44.1 kHz, engine
+  at the host rate, no resampler), presets, draft APKBUILD (`mdt-va-lv2`).
+  Next: armv7 package and phone tests. Plan: `va/PLAN.md`.
+- `common/`: the render test host, the generators' TTL helpers and the
+  validators' schema waiver, shared by both (§3).
 
 ## 1. What MDT has, and what is worth porting
 
@@ -88,11 +93,16 @@ Common facts:
 
 Moved out of `lxrdrums/` when the second plugin needs it, so each piece has
 two users before it becomes shared:
-- `common/resampler.c/h` (eDrumSynth's polyphase resampler).
-- `common/testhost/`: the render test host (dlopen, `urid:map`, MIDI atom
-  writer, block size runs).
-- `common/ttl.h`: TTL writing helpers for the generators (groups, ports,
-  scale points, designations).
+- `common/resampler.c/h` (eDrumSynth's polyphase resampler): still in
+  `lxrdrums/` (mTrio / mAnalog run at the host rate).
+- `common/testhost/` (done with `va/`): the render test host (dlopen,
+  `urid:map`, `log:log`, MIDI / time atom writer, forked renders in shared
+  memory, measurements).
+- `common/ttl.h` (done with `va/`): TTL writing helpers for the generators
+  (strings, prefixes, project block, groups, the MIDI input and stereo
+  output, manifest entry).
+- `common/zynthian-schema.ttl` (done with `va/`): the validators' waiver for
+  Zynthian's `lv2:displayPriority`.
 - **`common/teensyaudio/`**, for engines built from Teensy Audio objects
   (MicroSynth, the sample players' envelopes and biquads, a Braids wrapper):
   a minimal runtime copied from the port (`port/addon/teensyaudio/AudioStream.cpp`
@@ -106,7 +116,8 @@ two users before it becomes shared:
 
 ## 4. Order
 
-1. **Trio and Analog: mTrio and mAnalog** (decided 2026-11-23): one
+1. **Trio and Analog: mTrio and mAnalog** (decided 2026-11-23; implemented,
+   desktop-tested 2026-11-23: `va/PLAN.md`): one
    directory `va/` (shared `synth_shared.h` / `dsp_basics`), two bundles
    `mtrio.lv2` / `manalog.lv2`, `doap:name` "mTrio" / "mAnalog" (Zynthian
    keys `JV/mTrio`, `JV/mAnalog`), URIs
