@@ -55,6 +55,7 @@ const LV2_Descriptor *th_load (const char *path, const char *uri);
 // th_control_index() exits on an unknown symbol
 void th_load_symbols (const char *ttlPath, int first, int count);
 int th_control_index (const char *symbol);	// 0..count-1
+const char *th_control_symbol (int index);	// of control 0..count-1
 
 // atom sequences (capacity in bytes, including the sequence header)
 void th_seq_clear (LV2_Atom_Sequence *seq);

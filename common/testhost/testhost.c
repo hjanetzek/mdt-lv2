@@ -152,6 +152,11 @@ int th_control_index (const char *symbol)
 	exit (2);
 }
 
+const char *th_control_symbol (int index)
+{
+	return index >= 0 && index < numSymbols ? symbols[index] : "";
+}
+
 // ---- atom sequences ----
 
 void th_seq_clear (LV2_Atom_Sequence *seq)
