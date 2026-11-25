@@ -358,3 +358,118 @@ most of the time); per-block instead of per-sample work in the mixer (pan,
 gain, conversions); the ZDF SVF's coefficients per block; the resampler
 with fewer taps (48 → 32). Running the engine at 48 kHz would save the
 resampler but changes the sound (decision 3).
+
+## 13. v2: engines per slot, MIDI channel modes, kit presets (planned 2026-11-25)
+
+MDT lets every voice slot run any of the four engines (drum, snare,
+cymbal, hi-hat); v1 has the stock engines only (decision 4). And MDT plays
+the synth drums chromatically as an instrument besides the kit. v2 adds
+both, plus kit presets. Version 0.1.0; port symbols change (§13.4), which
+is acceptable now (0.0.x, no presets or users depending on them yet).
+
+### 13.1 Facts
+
+- Switching a slot's engine (`lxr_engine_set_engine()`) keeps the slot's
+  parameter numbers; about 6 of its roughly 35 parameters change meaning,
+  and the engine resets the slot's parameters to the engine's defaults.
+  Slot 1 (`lxr_engine_page_param()` per engine):
+
+  | Parameter | drum | snare | cymbal | hi-hat |
+  |---|---|---|---|---|
+  | 82 | FM Amount | Noise/Osc Mix | Mod Osc Gain 1 | Mod Osc Gain 1 |
+  | 83 | FM Frequency | Noise Frequency | Mod Osc Freq 1 | Mod Osc Freq 1 |
+  | 74 | Pitch Mod Amount | Pitch Mod Amount | Mod Osc Freq 2 | Mod Osc Freq 2 |
+  | 78 | Mod EG Slope | Mod EG Slope | Mod Osc Gain 2 | Mod Osc Gain 2 |
+  | 70 | Mod EG Decay | Mod EG Decay | Osc Waveform 3 | Osc Waveform 3 |
+  | 20 | FM Waveform | - | Osc Waveform 2 | Osc Waveform 2 |
+  | 134 | Osc Mode | EG Repeat Count | EG Repeat Count | - |
+
+  The other slots use their own parameter numbers the same way (each slot
+  has its own set, e.g. slot 2: 84, 85, 75, 79, 71, 21, 135).
+  Oscillator (coarse, fine, waveform, pulse width), amp EG (attack, decay,
+  slope), velocity (destination, amount, volume mod), transient, filter,
+  LFO and mix are the same for every engine.
+- LV2 ports are static (names, ranges, groups in the TTL), and a plugin
+  can't change its input ports' values (the host owns them).
+- LV2 MIDI input carries all 16 channels. Zynthian passes one channel per
+  chain by default (the chain's MIDI channel, filtered, not translated);
+  with the chain's "ALL MIDI CHANNELS" setting (`zmop_set_midi_chan_all()`,
+  "Multitimbral or unfiltered control of the engine") all channels pass
+  unchanged. The plugin can't see which.
+- `lxr_engine_trigger(track, velocity, note)` plays a track at a pitch
+  (`LXR_ENGINE_NOTE` 60 = its tuned pitch); MDT plays a voice chromatically
+  as instrument 10.
+- MDT's synth kits: LXR `.snd` files (8-byte name, 247 parameters,
+  OpenElixir-02's engine block if any), banks as folders under
+  `/SYNTHKITS` (`port/tools/synthkits.py`); not in git (their licences), so
+  none are shipped.
+
+### 13.2 Engines per slot
+
+- One engine selector port per slot (enumeration Drum / Snare / Cymbal /
+  Hi-hat, default the stock engine), in the slot's Mix group or its own
+  "Engine" group at the top of the voice.
+- Shared parameters: ports as in v1.
+- Engine-specific parameters: one group per slot and engine family, the
+  plugin sends only the active engine's group to the engine:
+  - "<Voice> Mod EG" (drum and snare engines: Mod EG decay, slope, pitch
+    mod amount);
+  - "<Voice> FM" (drum: FM amount, frequency, waveform, osc mode);
+  - "<Voice> Noise" (snare: noise frequency, noise/osc mix, EG repeat);
+  - "<Voice> Mod Osc" (cymbal and hi-hat: freq 1 / 2, gain 1 / 2,
+    waveforms 2 / 3, EG repeat for the cymbal).
+  Velocity (destination, amount, volume mod) becomes its own group (it
+  was in "Mod" with the mod EG).
+  Group names say which engines they apply to where it isn't obvious
+  ("BD Noise (snare engine)").
+- Engine change in `run()`: `lxr_engine_set_engine()` (which resets the
+  slot in the engine), then all of the slot's port values (shared and the
+  active engine's group) are sent again, so the ports win. Engine defaults
+  are therefore not loaded by an engine switch; kit presets provide
+  sensible values (§13.4).
+- Modulation targets (velocity / LFO destination enumerations): the
+  engine-specific targets get labels covering the engine families (e.g.
+  "BD FM Amt / Noise Mix / Mod Gain 1"), or neutral ones; decide in the
+  implementation and document.
+- Open hi-hat (track 7, note 46) is the second trigger of slot 6; check
+  and document what it does when slot 6 runs another engine (keep it
+  working as the LXR does, or silence it).
+- Pages grow from 70 to roughly 85-90.
+
+### 13.3 MIDI channel modes
+
+A "MIDI Mode" port (enumeration, in the Master group):
+- Kit (default): every note on every channel uses the GM drum map, as v1.
+  Right for a Zynthian chain on one channel.
+- Multi: channel 10 plays the GM kit; channels 1-7 play tracks 1-7
+  chromatically (note 60 = the tuned pitch, velocity as usual, note-offs
+  ignored as on the kit). For a chain set to all MIDI channels. Other
+  channels are ignored.
+
+### 13.4 Kit presets
+
+- Factory presets shipped in the bundle: only ones made here (no third
+  party kits): the init kit ("Init"), and one or two kits showing other
+  engine layouts (e.g. all-drum, two snares), with sensible engine-specific
+  values.
+- `tools/snd2lv2.c` (or `.py`): converts LXR / MDT `.snd` kits (a folder
+  or a whole `/SYNTHKITS` tree, one bank per folder) into an LV2 presets
+  bundle (`pset:Preset` with the port values and the engine selectors,
+  `pset:Bank` per folder, `lv2:appliesTo` the plugin URI) that the user
+  installs (e.g. `~/.lv2/` or Zynthian's presets directory). It decodes the
+  engine block with `lxr_engine_decode_engines()` and maps parameters to
+  the right engine group's ports. Test: a kit converted and loaded renders
+  the same as the engine loaded with the kit directly.
+- Port symbols: shared parameters keep their v1 symbols where possible; the
+  engine-specific ones get new symbols per engine group; the frozen symbol
+  list is updated once and frozen again for 0.1.0.
+
+### 13.5 Tests
+
+On top of v1's: engine switching per slot (each engine on each slot renders
+like the engine set up directly with that engine and the same values); the
+inactive engine groups have no effect; Multi mode (channel 10 = kit, 1-7 =
+tracks at pitch: a note 12 above sounds an octave higher), Kit mode ignores
+channels; the converter round trip; lint, regenerate-and-diff, frozen
+symbols, block-size independence as before. Then the armv7 build and the
+phone check as in steps 5-6 (coordinated with the device-testing session).
