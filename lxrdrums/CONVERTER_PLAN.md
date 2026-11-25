@@ -141,7 +141,10 @@ Writes `NNN-Name.zss` per project (or one for all given), and with
 1. v2 (`PLAN.md` §13): engines per slot (kits with other engine layouts),
    Multi MIDI mode (step notes), the kit converter's mapping.
 2. The machine-readable port map (§2) written by `gen_ttl`.
-3. **v2.1: an "LXR CC" switch** (port, default off): CCs and NRPNs (99 /
+3. **v2.1: an "LXR CC" switch** (port, **default off**, decided 2026-11-25: on,
+   the pedals Zynthian passes (CC 64/66/67/69), keyboard CCs (7, 10, 11)
+   and panic messages (120-123) would change drum parameters, and the
+   engine would drift from the ports unseen): CCs and NRPNs (99 /
    98 / 6) on any channel go to `lxr_engine_midi_cc()` (CC n = parameter
    n-1, NRPN n = 128 + n), as the LXR. The snapshot turns it on and puts the
    used CC numbers (and 6, 98, 99) into the chain's `cc_route` (synth chains
@@ -184,7 +187,8 @@ Writes `NNN-Name.zss` per project (or one for all given), and with
 
 - Default layout: Multi (keeps step notes and lengths, chain on all
   channels) or Kit (one pattern per LXR pattern, simpler to edit)?
-- Parameter locks via eDrumSynth v2.1's "LXR CC" switch: OK?
+- Parameter locks via eDrumSynth v2.1's "LXR CC" switch: OK, off by
+  default, the snapshots turn it on (decided 2026-11-25).
 - Kit changes: ZS3 by program change events (measure the latency first) or
   straight to an internal kit bank in eDrumSynth later?
 - Which projects to test with (the ones in `tmp/lxr`), and whether
