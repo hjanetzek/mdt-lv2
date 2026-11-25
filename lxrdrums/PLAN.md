@@ -9,6 +9,8 @@ widgets for them. This is the first MDT synth as LV2; the others follow the
 same pattern (§10).
 
 Status: steps 1-4 implemented (2026-11-22; notes: §11). Implementation: §9.
+v2 (0.1.0, §13) implemented on the desktop 2026-11-25 (notes: §14); armv7
+build and phone check open.
 
 ## 1. Facts this plan rests on
 
@@ -473,3 +475,120 @@ tracks at pitch: a note 12 above sounds an octave higher), Kit mode ignores
 channels; the converter round trip; lint, regenerate-and-diff, frozen
 symbols, block-size independence as before. Then the armv7 build and the
 phone check as in steps 5-6 (coordinated with the device-testing session).
+
+## 14. Implementation notes for v2 (0.1.0, 2026-11-25)
+
+Where the implementation settles or differs from §13:
+
+- **Ports derived from the engine**: `gen_ttl` sets every engine on every
+  slot (`lxr_engine_set_engine()`) and reads the slot's pages
+  (`lxr_engine_page_param()`, slot 6 with page 7). A parameter with the same
+  name, kind, range and place for all four engines is shared (one port per
+  voice, as in v1); the others are the engine specific ones (exactly the
+  engine's `slot_rolePar`, 7 per slot) and get a port per engine group and
+  name; the generator stops unless every parameter of every engine on every
+  slot has exactly one port sent for that engine. §13.1's table holds for
+  all slots, each with its own parameter numbers (`gen_ttl --engines`):
+
+  | Slot | role 0 | 1 | 2 | 3 | 4 | 5 | 6 |
+  |---|---|---|---|---|---|---|---|
+  | 1 BD | 20 | 70 | 74 | 78 | 82 | 83 | 134 |
+  | 2 T1 | 21 | 71 | 75 | 79 | 84 | 85 | 135 |
+  | 3 T2 | 22 | 72 | 76 | 80 | 86 | 87 | 136 |
+  | 4 SD | 223 | 73 | 77 | 81 | 28 | 27 | 68 |
+  | 5 CY | 23 | 24 | 30 | 32 | 31 | 29 | 69 |
+  | 6 HH | 25 | 26 | 34 | 36 | 35 | 33 | 224 |
+  | drum | FM wave | mod EG decay | pitch mod | mod EG slope | FM amount | FM freq | FM mode |
+  | snare | - | mod EG decay | pitch mod | mod EG slope | noise mix | noise freq | repeat |
+  | cymbal | mod wave 1 | mod wave 2 | mod freq 2 | mod gain 2 | mod gain 1 | mod freq 1 | repeat |
+  | hi-hat | mod wave 1 | mod wave 2 | mod freq 2 | mod gain 2 | mod gain 1 | mod freq 1 | - |
+
+  (223, 224: "unused" parameters of the stock firmware, used by OpenElixir-02
+  for the snare and hi-hat slots' roles 0 and 6.) Kinds differ per engine
+  (FM freq and mod osc freqs signed around 60, noise freq 0..127; waveforms
+  0..5; FM mode a menu, repeat 0..127), each port has its engine's.
+- **Groups**: per voice Mix (the engine selector first), Osc, Amp EG,
+  Filter, Transient, Mod EG (Drum/Snare), FM (Drum), Noise (Snare), Mod Osc
+  (Cym/HH), Velocity, LFO; the engine groups in this fixed order on every
+  voice, their names carrying the engines. The repeat (role 6) is the snare
+  engine's in Noise and the cymbal engine's in Mod Osc: two ports for one
+  parameter, each sent only for its engine. The snare's noise controls and
+  the snare's and cymbal's repeat moved out of Osc / Amp EG into the engine
+  groups. 305 controls, 68 groups, 89 pages (v1: 235, 49, 70).
+- **Engine selector placement**: in the Mix group (no own group: it would
+  add 6 one-control pages).
+- **Defaults of the engine groups**: the engine's own values: for the
+  slot's stock engine the init kit's; for another engine the values
+  `lxr_engine_set_engine()` gives (the engine's stock slot in the init kit)
+  for the group's first engine (Mod EG on the cymbal / hi-hat slots: the
+  drum engine's; Mod Osc on the drum / snare slots: the cymbal's, gains 0).
+- **Engine switch in `run()`**: the engine selectors first; on a change
+  `lxr_engine_set_engine()`, then the port cache is reloaded from the
+  engine (`lxr_engine_get_parameter()` for every port) and the normal
+  changed-value pass sends every port of the active engines that differs:
+  the slot's own parameters and also the other slots' modulation targets
+  the engine turned off (`kitEngines_turnOffRoleModulation()`), targets last.
+  Equivalent to resending all of the slot's ports (equal values are already
+  in the engine), and cheaper. The test's reference does the same against
+  the engine directly. Switching costs one `applyMorph()` (all 247
+  parameters resent by the engine): a user action, not per period.
+- **Modulation target labels**: an engine specific parameter is labelled
+  with what it is in each engine group, in group order, duplicates once:
+  "BD FM Amount / Noise Mix / Mod Gain 1", "BD FM Mode / Repeat" (decided
+  over neutral "role" names: Zynthian shows the label alone).
+- **Track 7 (open hi-hat) with another engine on slot 6**: kept working as
+  the engine does: `slot_trigger()` retriggers slot 6's voice with that
+  engine's trigger and sets its amp decay to decay B (`hh_ampeg_decay_open`,
+  shared by all engines); only the hi-hat engine also gets `isOpen`. So with
+  any engine notes 42 and 46 are one voice with two decays, choking each
+  other. Covered by the engine tests (slot 6 plays tracks 6 and 7).
+- **MIDI Mode** in the Master group; Multi: channels 1-7 -> tracks 1-7 with
+  the note as pitch (`lxr_engine_trigger()`'s note), channel 10 the GM map,
+  others ignored.
+- **Added**: `master_sample_rate` (parameter 114, the LXR's overall
+  "sample rate" of the performance page): in kits, so kit presets carry it
+  (v1 left it out). Mod target label "All Sample Rate" as before.
+- **Kit presets** set the kit ports: the engine selectors, every parameter
+  port below 247 (inactive engine groups at their defaults), not the
+  globals (DJ filter, reso, limiter, MIDI mode). Factory presets Init, Two
+  Snares (tom 2 as a clap with the snare engine), All Drums (every slot the
+  drum engine), built by `gen_ttl` from the engine (init kit, engines
+  switched, settings) and checked by the `presets` test. Not listened to:
+  the values are chosen from the parameters' meaning; to be checked by ear.
+- **Port map**: `tools/edrumsynth_ports.json`, written by `gen_ttl`,
+  compared by `ttl_regenerate` (requested for the LXR project converter,
+  `CONVERTER_PLAN.md`): per port symbol, index, parameter (null for the
+  selectors and MIDI mode), slot, engines, port range, offset (engine value
+  = port value + offset), default, kind, target, kit, the init kit's value;
+  the slots with their engine selector symbols; the MIDI mode port; the
+  unmapped kit parameters (0, 5, 97, 98, 127, 221, 222, 225-227, 244, 246:
+  unused).
+- **Converter in Python** (`tools/snd2lv2.py`, not C): no build needed by
+  users, and it shares the port map with the project converter. It doesn't
+  run the engine; it reproduces `lxr_engine_load_kit_engines()`: the engine
+  block decoded as `kitEngines_decode()`, values out of a port's range keep
+  the init kit's (the engine ignores them), missing parameters of short
+  (older LXR) kits are 0. One preset file per kit (Zynthian loads presets
+  one by one), banks in the manifest (`lv2:appliesTo`, as Zynthian finds
+  them), bank labels the folder names (with the folder above where they
+  repeat). The round trip test is bit exact.
+- **Symbols** (0.1.0, `tests/symbols.txt` frozen again): renamed
+  `<bd,t1,t2,sd>_mod_eg_decay/_mod_eg_slope/_mod_pitch_amount` ->
+  `_modeg_decay/_modeg_slope/_modeg_pitch`, `sd_osc_noise_freq/_mix` ->
+  `sd_noise_freq/_mix`, `sd_ampeg_repeat` -> `sd_noise_repeat`,
+  `cy_ampeg_repeat` -> `cy_modosc_repeat` (16); kept all others, among them
+  the velocity ports `<voice>_mod_vel_*` (now in the Velocity group) and
+  the drums' `_fm_*` and cymbal / hi-hat `_modosc_*` (the new scheme's
+  names); 84 new.
+- **Engine copy unchanged** (`engine/Synth_LXR/ORIGIN.md`).
+- **CPU** (desktop, x86_64, the render test's kit scenario, 5 runs each):
+  v1 216.7 ns/sample at 44.1 kHz (block 256), 228.4 at 48 kHz (block 960);
+  v2 219.0 and 229.0 (+1 % / +0.3 %, about the noise): the extra work is
+  the engine mask check per control per `run()`.
+- **Test host**: `common/testhost` got `th_control_symbol()`.
+- Open: the armv7 package and the phone check (steps 5-6, coordinated with
+  the device-testing session), the nura recipe's bump to 0.1.0 (the draft
+  `packaging/APKBUILD` here says 0.1.0), listening to the factory presets.
+  A v1 quirk kept: the FX bus' modulation targets are labelled with the
+  bass drum ("BD FX Param 1"), as the engine's target table groups them.
+

@@ -11,6 +11,10 @@ Status (2026-11-23):
   published by nura's CI for armv7, aarch64 and x86_64
   (`edrumsynth-lv2-0.0.1_git20261123-r0`, enabled by default in Zynthian via
   zynthian-sys-config r3). Plan: `lxrdrums/PLAN.md`.
+  v2 / 0.1.0 (desktop-tested 2026-11-25): engines per voice slot, MIDI
+  modes Kit / Multi, factory presets, `tools/snd2lv2.py` (.snd kits to an
+  LV2 presets bundle), the port map `tools/edrumsynth_ports.json`; next:
+  armv7 package and phone check, recipe bump.
 - `va/`: **mTrio** and **mAnalog** (MDT's Trio and Analog synths, §4.1).
   Done: desktop build and tests (bit exact against MDT at 44.1 kHz, engine
   at the host rate, no resampler), presets, draft APKBUILD (`mdt-va-lv2`).
