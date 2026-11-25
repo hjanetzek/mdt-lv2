@@ -2,9 +2,21 @@
  * render_test.c - a minimal LV2 host for eDrumSynth (dlopen +
  * lv2_descriptor, a urid:map, no lilv) and checks against the engine:
  *
+ *   render_test PATH/edrumsynth.so [-v]
+ *   render_test PATH/edrumsynth.so --presets "python3 -I PATH/snd2lv2.py" WORKDIR [-v]
+ *
+ * The render checks:
  * - 44.1 kHz: the plugin's output is the engine's (lxr_engine_render() with
  *   the same triggers and parameters), bit exact after the int16 -> float
  *   scale, for several host block sizes;
+ * - every engine on every slot: the plugin with the slot's engine port set
+ *   and values on that engine's ports renders as the engine switched with
+ *   lxr_engine_set_engine() and set to the same values; an engine switch
+ *   while playing; the ports of the engines the slots don't run have no
+ *   effect;
+ * - MIDI modes: Kit ignores the channel; Multi plays channel 10 as the kit
+ *   and channels 1-7 the tracks at the note's pitch (an octave up: twice
+ *   the frequency), other channels not;
  * - 48 kHz: no NaN, no clipping storm; the same signal for block sizes 1,
  *   64, 480, 960, 4096 and odd ones; the bass drum's pitch within 1 % of
  *   the 44.1 kHz render, its level within 0.5 dB;
@@ -12,6 +24,13 @@
  *   phases): sane output;
  * - a second instance in the same process is refused.
  * It also prints the CPU time per output sample (this machine, this build).
+ *
+ * With --presets: the factory presets (the bundle's presets.ttl: every kit
+ * port, "Init" = the defaults, each renders as the engine set up with its
+ * values), and the kit converter (tools/snd2lv2.py): synthetic .snd kits
+ * written to WORKDIR (a /SYNTHKITS tree with a bank folder), converted, and
+ * each converted preset renders as the engine with the kit loaded directly
+ * (lxr_engine_load_kit_engines()).
  *
  * The host is common/testhost (dlopen, urid:map, atom sequences, forked
  * renders, measurements).
@@ -34,10 +53,12 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/stat.h>
 
 static const char *pluginPath;
 
 #define CHECK TH_CHECK
+#define NELEM(a) (int) (sizeof (a) / sizeof ((a)[0]))
 
 // ---- the scenario ----
 
@@ -45,6 +66,7 @@ typedef struct
 {
 	int frame44;	// at 44.1 kHz; other rates: scaled
 	uint8_t note, velocity;
+	uint8_t channel;	// 0..15 (9: the GM drum channel 10)
 } Note;
 
 typedef struct
@@ -55,19 +77,32 @@ typedef struct
 
 typedef struct
 {
+	int frame44;	// a multiple of the host block (controls are read per run())
+	Control control;
+} Change;
+
+typedef struct
+{
 	const Note *notes;
 	int numNotes;
+	const Control *preset;	// applied first (a preset's values), or NULL
+	int numPreset;
 	const Control *controls;
 	int numControls;
+	const Change *changes;
+	int numChanges;
 	double seconds;
 	int tempoEvent;		// send a time:Position (120.0 bpm) with the first note
+	const uint8_t *kit;	// the reference loads this kit (LXR_ENGINE_KIT bytes) instead of setting the controls
+	const uint8_t *kitEngines;
 } Scenario;
 
+// the kit scenario: channel 10 (9)
 static const Note kitNotes[] = {
-	{ 0, 36, 127 }, { 1000, 42, 90 }, { 5513, 38, 110 }, { 11025, 46, 100 }, { 11030, 36, 64 },
-	{ 16537, 45, 120 }, { 22050, 41, 80 }, { 22051, 49, 127 }, { 27563, 42, 30 }, { 33075, 39, 100 },
-	{ 38587, 47, 70 }, { 44100, 36, 127 }, { 44164, 44, 50 }, { 50000, 51, 100 }, { 60000, 37, 127 },
-	{ 64000, 60, 100 },	// not mapped
+	{ 0, 36, 127, 9 }, { 1000, 42, 90, 9 }, { 5513, 38, 110, 9 }, { 11025, 46, 100, 9 }, { 11030, 36, 64, 9 },
+	{ 16537, 45, 120, 9 }, { 22050, 41, 80, 9 }, { 22051, 49, 127, 9 }, { 27563, 42, 30, 9 }, { 33075, 39, 100, 9 },
+	{ 38587, 47, 70, 9 }, { 44100, 36, 127, 9 }, { 44164, 44, 50, 9 }, { 50000, 51, 100, 9 }, { 60000, 37, 127, 9 },
+	{ 64000, 60, 100, 9 },	// not mapped
 };
 // some parameters away from the init kit: filter, pan, a velocity
 // modulation target, the FX bus (delay) with the cymbal on it
@@ -77,13 +112,13 @@ static const Control kitControls[] = {
 	{ "fx_p1", 40 }, { "fx_p4", 70 }, { "cy_mix_out", 6 }, { "hh_ampeg_decay_open", 60 },
 	{ "t1_osc_coarse", -10 },
 };
-static const Scenario kit = { kitNotes, sizeof kitNotes / sizeof kitNotes[0], kitControls,
-			      sizeof kitControls / sizeof kitControls[0], 2.0, 1 };
+static const Scenario kit = { kitNotes, NELEM (kitNotes), NULL, 0, kitControls, NELEM (kitControls), NULL, 0, 2.0, 1,
+			      NULL, NULL };
 
 // the bass drum alone, a steady pitch (no pitch modulation), long decay
-static const Note bdNotes[] = { { 441, 36, 127 } };
-static const Control bdControls[] = { { "bd_mod_pitch_amount", 0 }, { "bd_ampeg_decay", 100 }, { "bd_osc_coarse", 0 } };
-static const Scenario bd = { bdNotes, 1, bdControls, 3, 1.0, 0 };
+static const Note bdNotes[] = { { 441, 36, 127, 9 } };
+static const Control bdControls[] = { { "bd_modeg_pitch", 0 }, { "bd_ampeg_decay", 100 }, { "bd_osc_coarse", 0 } };
+static const Scenario bd = { bdNotes, 1, NULL, 0, bdControls, NELEM (bdControls), NULL, 0, 1.0, 0, NULL, NULL };
 
 // ---- the plugin ----
 
@@ -99,6 +134,23 @@ static int scaledFrame (int frame44, double rate)
 	return (int) ((double) frame44 * rate / 44100.0 + 0.5);
 }
 
+// the scenario's control values at the start: defaults, preset, controls
+static void initialControls (const Scenario *sc, float *controls)
+{
+	for (int i = 0; i < EDS_NUM_CONTROLS; i++)
+	{
+		controls[i] = eds_controls[i].def;
+	}
+	for (int i = 0; i < sc->numPreset; i++)
+	{
+		controls[controlIndex (sc->preset[i].symbol)] = sc->preset[i].value;
+	}
+	for (int i = 0; i < sc->numControls; i++)
+	{
+		controls[controlIndex (sc->controls[i].symbol)] = sc->controls[i].value;
+	}
+}
+
 // renders the scenario with the plugin, in this process
 static void renderPlugin (const Scenario *sc, double rate, int block, Output *out)
 {
@@ -112,14 +164,10 @@ static void renderPlugin (const Scenario *sc, double rate, int block, Output *ou
 	}
 
 	float controls[EDS_NUM_CONTROLS];
+	initialControls (sc, controls);
 	for (int i = 0; i < EDS_NUM_CONTROLS; i++)
 	{
-		controls[i] = eds_controls[i].def;
 		d->connect_port (h, (uint32_t) (EDS_PORT_CONTROL0 + i), &controls[i]);
-	}
-	for (int i = 0; i < sc->numControls; i++)
-	{
-		controls[controlIndex (sc->controls[i].symbol)] = sc->controls[i].value;
 	}
 
 	static uint64_t seqBuf[8192];
@@ -135,13 +183,22 @@ static void renderPlugin (const Scenario *sc, double rate, int block, Output *ou
 	for (int pos = 0; pos < frames; pos += block)
 	{
 		const int n = pos + block <= frames ? block : frames - pos;
+		for (int i = 0; i < sc->numChanges; i++)
+		{
+			const int f = scaledFrame (sc->changes[i].frame44, rate);
+			if (f >= pos && f < pos + n)
+			{
+				controls[controlIndex (sc->changes[i].control.symbol)] = sc->changes[i].control.value;
+			}
+		}
 		th_seq_clear (seq);
 		for (int i = 0; i < sc->numNotes; i++)
 		{
 			const int f = scaledFrame (sc->notes[i].frame44, rate);
 			if (f >= pos && f < pos + n)
 			{
-				const uint8_t msg[3] = { LV2_MIDI_MSG_NOTE_ON | 9, sc->notes[i].note, sc->notes[i].velocity };
+				const uint8_t msg[3] = { (uint8_t) (LV2_MIDI_MSG_NOTE_ON | sc->notes[i].channel), sc->notes[i].note,
+							 sc->notes[i].velocity };
 				if (sc->tempoEvent && i == 0)
 				{
 					th_seq_tempo (seq, sizeof seqBuf, f - pos, 120.f);
@@ -178,49 +235,112 @@ static void renderPlugin (const Scenario *sc, double rate, int block, Output *ou
 	free (outR);
 }
 
-// the reference: the engine driven directly, 44.1 kHz. The plugin starts a
-// trigger at the next engine block: the block ceil (frame / 64)
+// ---- the reference: the engine driven directly, 44.1 kHz ----
+
+static int roundValue (float v)
+{
+	return (int) lrintf (v);
+}
+
+// the controls as engine settings: each slot's engine switched
+// (lxr_engine_set_engine(), which resets the slot), then every parameter
+// of the engines the slots run set where the engine has another value; the
+// modulation targets last
+static void engineApply (const float *controls)
+{
+	for (int slot = 0; slot < EDS_SLOTS; slot++)
+	{
+		const uint8_t e = (uint8_t) roundValue (controls[eds_engine_controls[slot]]);
+		if (e != lxr_engine_get_engine ((uint8_t) slot))
+		{
+			lxr_engine_set_engine ((uint8_t) slot, e);
+		}
+	}
+	uint8_t engines[EDS_SLOTS + 1] = { 0 };
+	lxr_engine_get_engines (engines);
+	for (int pass = 0; pass <= 1; pass++)
+	{
+		for (int i = 0; i < EDS_NUM_CONTROLS; i++)
+		{
+			const eds_control *c = &eds_controls[i];
+			if (c->type != EDS_CTL_PARAM || c->target != pass || !(c->engines >> engines[c->slot] & 1))
+			{
+				continue;
+			}
+			const int v = roundValue (controls[i]) + c->offset;
+			if (v != lxr_engine_get_parameter (c->param))
+			{
+				lxr_engine_set_parameter (c->param, (uint8_t) v);
+			}
+		}
+	}
+}
+
+// the GM drum map (as src/notemap.h, written out again)
+static int gmTrack (uint8_t note)
+{
+	switch (note)
+	{
+	case 35: case 36: return 0;
+	case 45: case 47: case 48: case 50: return 1;
+	case 41: case 43: return 2;
+	case 37: case 38: case 39: case 40: return 3;
+	case 49: case 51: case 52: case 55: case 57: case 59: return 4;
+	case 42: case 44: return 5;
+	case 46: return 6;
+	default: return -1;
+	}
+}
+
+// the plugin starts a trigger at the next engine block: the block
+// ceil (frame / 64); control changes apply before the block at their frame
 static void renderEngine (const Scenario *sc, Output *out)
 {
 	lxr_engine_init ();
 	lxr_engine_set_split (LXR_SPLIT_KIT, 0);
-	for (int pass = 0; pass <= 1; pass++)
+	float controls[EDS_NUM_CONTROLS];
+	initialControls (sc, controls);
+	if (sc->kit)
 	{
-		for (int i = 0; i < sc->numControls; i++)
-		{
-			const int c = controlIndex (sc->controls[i].symbol);
-			if (eds_controls[c].target == pass)
-			{
-				const int v = (int) lrintf (sc->controls[i].value) + eds_controls[c].offset;
-				if (v != lxr_engine_get_parameter (eds_controls[c].param))
-				{
-					lxr_engine_set_parameter (eds_controls[c].param, (uint8_t) v);
-				}
-			}
-		}
+		lxr_engine_load_kit_engines (sc->kit, lxr_engine_kit_size (), sc->kitEngines);
+	}
+	else
+	{
+		engineApply (controls);
 	}
 	const int frames = out->frames;
 	for (int b = 0; b * LXR_ENGINE_BLOCK < frames; b++)
 	{
+		int changed = 0;
+		for (int i = 0; i < sc->numChanges; i++)
+		{
+			if (sc->changes[i].frame44 == b * LXR_ENGINE_BLOCK)
+			{
+				controls[controlIndex (sc->changes[i].control.symbol)] = sc->changes[i].control.value;
+				changed = 1;
+			}
+		}
+		if (changed)
+		{
+			engineApply (controls);
+		}
+		const int multi = roundValue (controls[EDS_MIDI_MODE_CONTROL]) == 1;
 		for (int i = 0; i < sc->numNotes; i++)
 		{
-			const int f = sc->notes[i].frame44;
+			const Note *nt = &sc->notes[i];
+			const int f = nt->frame44;
 			if (f <= b * LXR_ENGINE_BLOCK && f > (b - 1) * LXR_ENGINE_BLOCK)
 			{
-				int track = -1;
-				switch (sc->notes[i].note)
+				int track = gmTrack (nt->note);
+				uint8_t pitch = LXR_ENGINE_NOTE;
+				if (multi && nt->channel != 9)
 				{
-				case 35: case 36: track = 0; break;
-				case 45: case 47: case 48: case 50: track = 1; break;
-				case 41: case 43: track = 2; break;
-				case 37: case 38: case 39: case 40: track = 3; break;
-				case 49: case 51: case 52: case 55: case 57: case 59: track = 4; break;
-				case 42: case 44: track = 5; break;
-				case 46: track = 6; break;
+					track = nt->channel < 7 ? nt->channel : -1;
+					pitch = nt->note;
 				}
 				if (track >= 0)
 				{
-					lxr_engine_trigger ((uint8_t) track, sc->notes[i].velocity, LXR_ENGINE_NOTE);
+					lxr_engine_trigger ((uint8_t) track, nt->velocity, pitch);
 				}
 			}
 		}
@@ -284,22 +404,511 @@ static void sanity (const Output *o, const char *what)
 	CHECK (o->ok, "%s: a second instance was not refused, or a new one after cleanup failed", what);
 }
 
-int main (int argc, char **argv)
+// the plugin at 44.1 kHz (block 256) == the engine
+static void checkAgainstEngine (const Scenario *sc, const char *what, int needSound)
 {
-	th_verbose = argc == 3 && !strcmp (argv[2], "-v");
-	if (argc != 2 && !th_verbose)
+	Output *ref = render (sc, 44100, 0);
+	Output *o = render (sc, 44100, 256);
+	if (needSound)
 	{
-		fprintf (stderr, "usage: render_test PATH/edrumsynth.so [-v]\n");
-		return 2;
+		sanity (o, what);
 	}
-	pluginPath = argv[1];
-	// the control port symbols from the bundle's TTL (next to the binary)
-	char ttl[4096];
-	snprintf (ttl, sizeof ttl, "%s", pluginPath);
-	char *slash = strrchr (ttl, '/');
-	snprintf (slash ? slash + 1 : ttl, sizeof ttl - (size_t) (slash ? slash + 1 - ttl : 0), "edrumsynth.ttl");
-	th_load_symbols (ttl, EDS_PORT_CONTROL0, EDS_NUM_CONTROLS);
+	CHECK (th_identical (o, ref), "%s: not the engine's output (first difference at frame %d)", what,
+	       th_first_difference (o, ref));
+	release (o);
+	release (ref);
+}
 
+// ---- engines per slot ----
+
+static const char *const engineNames[4] = { "drum", "snare", "cymbal", "hi-hat" };
+static const uint8_t trackNotes[7] = { 36, 45, 41, 38, 49, 42, 46 };
+
+// a value of a control (port value) away from its default, in its range
+static float otherValue (int i, int k)
+{
+	const eds_control *c = &eds_controls[i];
+	const int span = c->max - c->min + 1;
+	int x = c->min + (i * 37 + k * 11 + 5) % span;
+	if (x - c->offset == (int) c->def)
+	{
+		x = c->min + (x - c->min + 1) % span;
+	}
+	return (float) (x - c->offset);
+}
+
+static const char *symbolOf (int i)
+{
+	return th_control_symbol (i);
+}
+
+// every engine on every slot, with values on the engine's own ports
+static void checkEngines (void)
+{
+	for (int slot = 0; slot < EDS_SLOTS; slot++)
+	{
+		for (int e = 0; e < 4; e++)
+		{
+			Control controls[64];
+			int n = 0;
+			controls[n++] = (Control) { symbolOf (eds_engine_controls[slot]), (float) e };
+			for (int i = 0; i < EDS_NUM_CONTROLS && n < NELEM (controls); i++)
+			{
+				const eds_control *c = &eds_controls[i];
+				if (c->type == EDS_CTL_PARAM && c->slot == slot && c->engines != EDS_ALL_ENGINES && c->engines >> e & 1)
+				{
+					controls[n++] = (Control) { symbolOf (i), otherValue (i, e) };
+				}
+			}
+			// the slot's track (slot 6: closed and open), a few velocities
+			Note notes[8];
+			int nn = 0;
+			const int tracks[2] = { slot, slot == EDS_SLOTS - 1 ? 6 : slot };
+			const int times[4] = { 0, 6000, 13000, 20000 }, velocities[4] = { 127, 60, 100, 30 };
+			for (int k = 0; k < 4; k++)
+			{
+				notes[nn++] = (Note) { times[k], trackNotes[tracks[k & 1]], (uint8_t) velocities[k], 9 };
+			}
+			const Scenario sc = { notes, nn, NULL, 0, controls, n, NULL, 0, 0.7, 0, NULL, NULL };
+			char what[96];
+			snprintf (what, sizeof what, "slot %d with the %s engine", slot + 1, engineNames[e]);
+			checkAgainstEngine (&sc, what, 1);
+		}
+	}
+
+	// switching while playing: the bass drum to the snare engine and back,
+	// the hi-hat to the drum engine (the open hi-hat on it), with controls
+	// changed at the same time
+	static const Note notes[] = {
+		{ 0, 36, 127, 9 }, { 4000, 46, 100, 9 }, { 11000, 36, 120, 9 }, { 15000, 42, 90, 9 }, { 15100, 46, 90, 9 },
+		{ 25000, 36, 110, 9 }, { 26000, 46, 127, 9 }, { 34000, 36, 127, 9 },
+	};
+	static const Change changes[] = {
+		{ 10240, { "bd_mix_engine", 1 } }, { 10240, { "bd_noise_repeat", 2 } }, { 10240, { "bd_ampeg_decay", 40 } },
+		{ 14848, { "hh_mix_engine", 0 } }, { 14848, { "hh_ampeg_decay_open", 70 } }, { 14848, { "hh_fm_amount", 90 } },
+		{ 24576, { "bd_mix_engine", 0 } }, { 24576, { "bd_fm_amount", 50 } }, { 33792, { "bd_osc_coarse", 5 } },
+	};
+	const Scenario sw = { notes, NELEM (notes), NULL, 0, NULL, 0, changes, NELEM (changes), 1.0, 0, NULL, NULL };
+	checkAgainstEngine (&sw, "engine switches while playing", 1);
+}
+
+// the ports of the engines the slots don't run change nothing
+static void checkInactive (void)
+{
+	static const uint8_t layouts[2][EDS_SLOTS] = { { 0, 0, 0, 1, 2, 3 }, { 1, 2, 3, 0, 3, 0 } };
+	for (int l = 0; l < 2; l++)
+	{
+		Control base[EDS_SLOTS], all[EDS_SLOTS + EDS_NUM_CONTROLS];
+		int n = 0;
+		for (int s = 0; s < EDS_SLOTS; s++)
+		{
+			base[s] = all[n++] = (Control) { symbolOf (eds_engine_controls[s]), layouts[l][s] };
+		}
+		int inactive = 0;
+		for (int i = 0; i < EDS_NUM_CONTROLS; i++)
+		{
+			const eds_control *c = &eds_controls[i];
+			if (c->type == EDS_CTL_PARAM && c->slot < EDS_SLOTS && !(c->engines >> layouts[l][c->slot] & 1))
+			{
+				all[n++] = (Control) { symbolOf (i), otherValue (i, 3) };
+				inactive++;
+			}
+		}
+		const Scenario a = { kitNotes, NELEM (kitNotes), NULL, 0, base, EDS_SLOTS, NULL, 0, 1.5, 0, NULL, NULL };
+		const Scenario b = { kitNotes, NELEM (kitNotes), NULL, 0, all, n, NULL, 0, 1.5, 0, NULL, NULL };
+		Output *oa = render (&a, 44100, 256), *ob = render (&b, 44100, 256);
+		char what[64];
+		snprintf (what, sizeof what, "engine layout %d", l + 1);
+		sanity (oa, what);
+		CHECK (th_identical (oa, ob), "%s: the %d inactive engine ports change the sound (frame %d)", what, inactive,
+		       th_first_difference (oa, ob));
+		printf ("engine layout %d: %d inactive engine ports without effect\n", l + 1, inactive);
+		release (oa);
+		release (ob);
+	}
+}
+
+// ---- MIDI modes ----
+
+static void checkMidiModes (void)
+{
+	// Kit: the channel doesn't matter
+	Note ch1[NELEM (kitNotes)];
+	for (int i = 0; i < NELEM (kitNotes); i++)
+	{
+		ch1[i] = kitNotes[i];
+		ch1[i].channel = (uint8_t) (i % 16);
+	}
+	const Scenario kitCh = { ch1, NELEM (ch1), NULL, 0, kitControls, NELEM (kitControls), NULL, 0, 2.0, 1, NULL, NULL };
+	Output *k10 = render (&kit, 44100, 256), *kAll = render (&kitCh, 44100, 256);
+	CHECK (th_identical (k10, kAll), "Kit mode: the channels change the output (frame %d)", th_first_difference (k10, kAll));
+
+	// Multi: channel 10 is the kit
+	Control multiKit[NELEM (kitControls) + 1];
+	memcpy (multiKit, kitControls, sizeof kitControls);
+	multiKit[NELEM (kitControls)] = (Control) { "master_midi_mode", 1 };
+	const Scenario mk = { kitNotes, NELEM (kitNotes), NULL, 0, multiKit, NELEM (multiKit), NULL, 0, 2.0, 1, NULL, NULL };
+	Output *m10 = render (&mk, 44100, 256);
+	CHECK (th_identical (k10, m10), "Multi mode: channel 10 is not the kit (frame %d)", th_first_difference (k10, m10));
+	release (k10);
+	release (kAll);
+	release (m10);
+
+	// Multi: other channels than 1-7 and 10 are ignored
+	Note others[16];
+	int n = 0;
+	for (uint8_t ch = 7; ch < 16; ch++)
+	{
+		if (ch != 9)
+		{
+			others[n++] = (Note) { 441 * ch, 36, 127, ch };
+		}
+	}
+	const Control multi[] = { { "master_midi_mode", 1 } };
+	const Scenario silent = { others, n, NULL, 0, multi, 1, NULL, 0, 0.5, 0, NULL, NULL };
+	Output *s = render (&silent, 44100, 256);
+	CHECK (th_peak (s) == 0.f, "Multi mode: channels 8, 9, 11-16 play (peak %f)", th_peak (s));
+	release (s);
+
+	// Multi: channels 1-7 play their tracks at the note's pitch, as the
+	// engine; the open hi-hat on channel 7
+	Note tracks[14];
+	n = 0;
+	for (uint8_t t = 0; t < 7; t++)
+	{
+		tracks[n++] = (Note) { 2000 * t, (uint8_t) (48 + 3 * t), 120, t };
+		tracks[n++] = (Note) { 2000 * t + 15000, (uint8_t) (64 + 2 * t), 90, t };
+	}
+	const Scenario mt = { tracks, n, NULL, 0, multi, 1, NULL, 0, 1.0, 0, NULL, NULL };
+	checkAgainstEngine (&mt, "Multi mode, channels 1-7", 1);
+
+	// an octave up: twice the bass drum's frequency; note 60 on channel 1 =
+	// the kit's bass drum
+	const Control bdMulti[] = { { "bd_modeg_pitch", 0 }, { "bd_ampeg_decay", 100 }, { "bd_osc_coarse", 0 },
+				    { "master_midi_mode", 1 } };
+	static const Note n60[] = { { 441, 60, 127, 0 } }, n72[] = { { 441, 72, 127, 0 } };
+	const Scenario s60 = { n60, 1, NULL, 0, bdMulti, NELEM (bdMulti), NULL, 0, 1.0, 0, NULL, NULL };
+	const Scenario s72 = { n72, 1, NULL, 0, bdMulti, NELEM (bdMulti), NULL, 0, 1.0, 0, NULL, NULL };
+	Output *bdKit = render (&bd, 44100, 512), *o60 = render (&s60, 44100, 512), *o72 = render (&s72, 44100, 512);
+	CHECK (th_identical (bdKit, o60), "Multi mode: note 60 on channel 1 is not the bass drum's tuned pitch (frame %d)",
+	       th_first_difference (bdKit, o60));
+	const double f60 = th_frequency (o60, 44100, 0.05, 0.6), f72 = th_frequency (o72, 44100, 0.05, 0.6);
+	printf ("Multi mode: bass drum note 60 %.2f Hz, note 72 %.2f Hz (ratio %.4f)\n", f60, f72, f72 / f60);
+	CHECK (f60 > 20 && fabs (f72 / f60 - 2) < 0.02, "Multi mode: an octave up is %.4f times the frequency", f72 / f60);
+	release (bdKit);
+	release (o60);
+	release (o72);
+}
+
+// ---- presets ----
+
+#define MAX_PRESETS	32
+
+typedef struct
+{
+	char label[64], bank[256], file[512];
+	int numValues;
+	Control values[EDS_NUM_CONTROLS];
+	char symbols[EDS_NUM_CONTROLS][64];
+} Preset;
+
+static Preset presets[MAX_PRESETS];
+static int numPresets;
+
+// the presets of a TTL file as tools/gen_ttl.c and tools/snd2lv2.py write
+// them: "a pset:Preset", rdfs:label, pset:bank, then lv2:symbol / pset:value
+static void parsePresets (const char *path)
+{
+	FILE *f = fopen (path, "r");
+	if (!f)
+	{
+		perror (path);
+		exit (2);
+	}
+	char line[1024];
+	Preset *p = NULL;
+	char symbol[64] = "";
+	while (fgets (line, sizeof line, f))
+	{
+		char text[256];
+		float v;
+		if (strstr (line, "a pset:Preset"))
+		{
+			if (numPresets == MAX_PRESETS)
+			{
+				fprintf (stderr, "%s: too many presets\n", path);
+				exit (2);
+			}
+			p = &presets[numPresets++];
+			memset (p, 0, sizeof *p);
+			snprintf (p->file, sizeof p->file, "%s", path);
+		}
+		else if (p && sscanf (line, " rdfs:label \"%63[^\"]\"", text) == 1)
+			snprintf (p->label, sizeof p->label, "%.63s", text);
+		else if (p && sscanf (line, " pset:bank <%255[^>]>", text) == 1)
+			snprintf (p->bank, sizeof p->bank, "%s", text);
+		else if (p && sscanf (line, " lv2:symbol \"%63[a-z0-9_]\"", symbol) == 1)
+			continue;
+		else if (p && *symbol && sscanf (line, " pset:value %f", &v) == 1 && p->numValues < EDS_NUM_CONTROLS)
+		{
+			snprintf (p->symbols[p->numValues], sizeof p->symbols[0], "%s", symbol);
+			p->values[p->numValues].symbol = p->symbols[p->numValues];
+			p->values[p->numValues].value = v;
+			p->numValues++;
+			*symbol = '\0';
+		}
+	}
+	fclose (f);
+}
+
+// a preset has a value for every kit port and only those, in range
+static void checkPresetPorts (const Preset *p)
+{
+	int count = 0;
+	for (int i = 0; i < EDS_NUM_CONTROLS; i++)
+	{
+		count += eds_controls[i].kit;
+	}
+	CHECK (p->numValues == count, "preset %s: %d values, %d kit ports", p->label, p->numValues, count);
+	for (int k = 0; k < p->numValues; k++)
+	{
+		const int i = controlIndex (p->values[k].symbol);
+		const eds_control *c = &eds_controls[i];
+		const int x = roundValue (p->values[k].value) + c->offset;
+		CHECK (c->kit, "preset %s: %s is not a kit port", p->label, p->values[k].symbol);
+		CHECK (x >= c->min && x <= c->max, "preset %s: %s = %g out of range", p->label, p->values[k].symbol,
+		       p->values[k].value);
+	}
+}
+
+static void checkFactoryPresets (void)
+{
+	char path[4096];
+	snprintf (path, sizeof path, "%s", pluginPath);
+	char *slash = strrchr (path, '/');
+	snprintf (slash ? slash + 1 : path, sizeof path - (size_t) (slash ? slash + 1 - path : 0), "presets.ttl");
+	numPresets = 0;
+	parsePresets (path);
+	CHECK (numPresets >= 2, "%d factory presets", numPresets);
+	Output *defaults = render (&kit, 44100, 256);
+	for (int k = 0; k < numPresets; k++)
+	{
+		const Preset *p = &presets[k];
+		checkPresetPorts (p);
+		const Scenario sc = { kitNotes, NELEM (kitNotes), p->values, p->numValues, NULL, 0, NULL, 0, 2.0, 1, NULL, NULL };
+		char what[96];
+		snprintf (what, sizeof what, "factory preset %.63s", p->label);
+		checkAgainstEngine (&sc, what, 1);
+		if (!strcmp (p->label, "Init"))
+		{
+			const Scenario init = { kitNotes, NELEM (kitNotes), p->values, p->numValues, kitControls,
+						NELEM (kitControls), NULL, 0, 2.0, 1, NULL, NULL };
+			Output *o = render (&init, 44100, 256);
+			CHECK (th_identical (o, defaults), "factory preset Init: not the defaults (frame %d)",
+			       th_first_difference (o, defaults));
+			release (o);
+		}
+		printf ("factory preset %s: %d values\n", p->label, p->numValues);
+	}
+	release (defaults);
+}
+
+// ---- the kit converter ----
+
+#define KIT_NAME	8
+
+typedef struct
+{
+	const char *dir, *file, *name;
+	uint8_t engines[EDS_SLOTS];
+	int withBlock;		// the OpenElixir-02 engine block (else: an LXR kit, stock engines)
+	unsigned seed;
+	uint8_t params[256];	// written
+} Kit;
+
+static Kit kits[] = {
+	{ "SYNTHKITS", "00-USER1.snd", "USER 1", { 1, 2, 3, 0, 0, 1 }, 1, 1, { 0 } },
+	{ "SYNTHKITS/BANKA", "01-METAL.snd", "METAL", { 3, 2, 2, 3, 2, 0 }, 1, 2, { 0 } },
+	{ "SYNTHKITS/BANKA", "02-LXR.SND", "LXR KIT", { 0, 0, 0, 1, 2, 3 }, 0, 3, { 0 } },
+};
+
+static unsigned lcg (unsigned *s)
+{
+	*s = *s * 1103515245u + 12345u;
+	return *s >> 16;
+}
+
+// a kit: the init kit, the engines switched, random values on the ports of
+// those engines (as the converter can express them: the audio outputs on
+// St1 / St2, volumes from 60 so it is not silent); written as a .snd
+static void makeKit (void *arg, th_output *out)
+{
+	Kit *k = arg;
+	lxr_engine_init ();
+	for (int s = 0; s < EDS_SLOTS; s++)
+	{
+		lxr_engine_set_engine ((uint8_t) s, k->engines[s]);
+	}
+	unsigned seed = k->seed;
+	for (int pass = 0; pass <= 1; pass++)
+	{
+		for (int i = 0; i < EDS_NUM_CONTROLS; i++)
+		{
+			const eds_control *c = &eds_controls[i];
+			if (c->type != EDS_CTL_PARAM || !c->kit || c->target != pass
+			    || (c->slot < EDS_SLOTS && !(c->engines >> k->engines[c->slot] & 1)))
+			{
+				continue;
+			}
+			int x = c->min + (int) (lcg (&seed) % (unsigned) (c->max - c->min + 1));
+			const char *sym = symbolOf (i);
+			if (strstr (sym, "_out"))
+				x = x & 1;
+			else if (strstr (sym, "_volume") && x < 60)
+				x += 60;
+			lxr_engine_set_parameter (c->param, (uint8_t) x);
+		}
+	}
+	const uint16_t size = lxr_engine_kit_size ();
+	uint8_t data[KIT_NAME + 256 + LXR_ENGINE_BLOCK_SIZE];
+	memset (data, 0, sizeof data);
+	memcpy (data, k->name, strlen (k->name) < KIT_NAME ? strlen (k->name) : KIT_NAME);
+	lxr_engine_get_kit (data + KIT_NAME, size);
+	uint8_t engines[EDS_SLOTS];
+	lxr_engine_get_engines (engines);
+	size_t length = KIT_NAME + size;
+	if (k->withBlock)
+	{
+		length += lxr_engine_encode_engines (engines, data + length);
+	}
+	// for the parent: the parameters at byte 0, the file at byte 512 (its size in ok)
+	memcpy (out->data, data + KIT_NAME, size);
+	memcpy ((uint8_t *) out->data + 512, data, length);
+	out->ok = (int) length;
+}
+
+static void writeFile (const char *path, const void *data, size_t size)
+{
+	FILE *f = fopen (path, "wb");
+	if (!f || fwrite (data, 1, size, f) != size)
+	{
+		perror (path);
+		exit (2);
+	}
+	fclose (f);
+}
+
+static void mkdirs (const char *path)
+{
+	char p[4096];
+	snprintf (p, sizeof p, "%s", path);
+	for (char *c = p + 1; *c; c++)
+	{
+		if (*c == '/')
+		{
+			*c = '\0';
+			mkdir (p, 0755);
+			*c = '/';
+		}
+	}
+	mkdir (p, 0755);
+}
+
+static void checkConverter (const char *converter, const char *work)
+{
+	char cmd[8192], path[4096];
+	snprintf (cmd, sizeof cmd, "rm -rf '%s/SYNTHKITS' '%s/kits.lv2'", work, work);
+	CHECK (system (cmd) == 0, "%s failed", cmd);
+	for (int i = 0; i < NELEM (kits); i++)
+	{
+		Kit *k = &kits[i];
+		th_output *o = th_output_new (1024);
+		th_fork (makeKit, k, o, "of a kit");
+		memcpy (k->params, o->data, lxr_engine_kit_size ());
+		snprintf (path, sizeof path, "%s/%s", work, k->dir);
+		mkdirs (path);
+		snprintf (path, sizeof path, "%s/%s/%s", work, k->dir, k->file);
+		writeFile (path, (const uint8_t *) o->data + 512, (size_t) o->ok);
+		th_output_free (o);
+	}
+	// a placeholder kit (left out) and a file that isn't a kit
+	snprintf (path, sizeof path, "%s/SYNTHKITS/BANKA/03-INITK.snd", work);
+	uint8_t init[KIT_NAME + 256] = "Initkit";
+	writeFile (path, init, KIT_NAME + lxr_engine_kit_size ());
+	snprintf (path, sizeof path, "%s/SYNTHKITS/BANKA/04-SHORT.snd", work);
+	writeFile (path, init, 100);
+
+	snprintf (cmd, sizeof cmd, "%s -o '%s/kits.lv2' '%s/SYNTHKITS' %s", converter, work, work, th_verbose ? "" : "2>/dev/null");
+	const int rc = system (cmd);
+	CHECK (rc == 0, "%s: exit status %d", cmd, rc);
+
+	// the manifest: two banks, three presets
+	snprintf (path, sizeof path, "%s/kits.lv2/manifest.ttl", work);
+	FILE *f = fopen (path, "r");
+	CHECK (f != NULL, "no %s", path);
+	int banks = 0, presetFiles = 0;
+	char files[8][512];
+	if (f)
+	{
+		char line[1024], file[512];
+		while (fgets (line, sizeof line, f))
+		{
+			banks += strstr (line, "a pset:Bank") != NULL;
+			if (sscanf (line, " rdfs:seeAlso <%511[^>]>", file) == 1 && presetFiles < 8)
+			{
+				snprintf (files[presetFiles++], sizeof files[0], "%s", file);
+			}
+		}
+		fclose (f);
+	}
+	CHECK (banks == 2, "the converter wrote %d banks", banks);
+	CHECK (presetFiles == NELEM (kits), "the converter wrote %d presets", presetFiles);
+
+	numPresets = 0;
+	for (int i = 0; i < presetFiles; i++)
+	{
+		snprintf (path, sizeof path, "%.2000s/kits.lv2/%.511s", work, files[i]);
+		parsePresets (path);
+	}
+	CHECK (numPresets == NELEM (kits), "%d presets parsed", numPresets);
+	for (int k = 0; k < numPresets; k++)
+	{
+		const Preset *p = &presets[k];
+		checkPresetPorts (p);
+		// which kit: by its name in the label
+		const Kit *kit = NULL;
+		for (int i = 0; i < NELEM (kits); i++)
+		{
+			if (strstr (p->label, kits[i].name))
+			{
+				kit = &kits[i];
+			}
+		}
+		CHECK (kit != NULL, "converted preset %s: no such kit", p->label);
+		if (!kit)
+		{
+			continue;
+		}
+		const Scenario plugin = { kitNotes, NELEM (kitNotes), p->values, p->numValues, NULL, 0, NULL, 0, 2.0, 1, NULL, NULL };
+		const Scenario engine = { kitNotes, NELEM (kitNotes), NULL, 0, NULL, 0, NULL, 0, 2.0, 1, kit->params,
+					  kit->withBlock ? kit->engines : NULL };
+		Output *o = render (&plugin, 44100, 256), *ref = render (&engine, 44100, 0);
+		char what[400];
+		snprintf (what, sizeof what, "converted kit %.63s (bank %.255s)", p->label, strrchr (p->bank, '#') ? strrchr (p->bank, '#') + 1 : p->bank);
+		// random values: loud, maybe clipping; not NaN, not silent
+		CHECK (!th_count_nan (o) && th_peak (o) > 0.01f, "%s: NaN or silent", what);
+		CHECK (th_identical (o, ref), "%s: not the engine with the kit loaded (first difference at frame %d)", what,
+		       th_first_difference (o, ref));
+		printf ("%s: %d values, renders as the kit\n", what, p->numValues);
+		release (o);
+		release (ref);
+	}
+}
+
+// ---- main ----
+
+static void checkRates (void)
+{
 	// 44.1 kHz: bit exact against the engine
 	Output *ref = render (&kit, 44100, 0);
 	const int blocks44[] = { 1, 63, 64, 256, 1000, 4096 };
@@ -368,7 +977,46 @@ int main (int argc, char **argv)
 	}
 	release (bd44);
 	release (bd48);
+}
 
-	printf ("%s\n", th_failures ? "FAILED" : "all render checks passed");
+int main (int argc, char **argv)
+{
+	const char *converter = NULL, *work = NULL;
+	int args = argc;
+	th_verbose = argc > 2 && !strcmp (argv[argc - 1], "-v");
+	args -= th_verbose;
+	if (args == 5 && !strcmp (argv[2], "--presets"))
+	{
+		converter = argv[3];
+		work = argv[4];
+	}
+	else if (args != 2)
+	{
+		fprintf (stderr, "usage: render_test PATH/edrumsynth.so [--presets CONVERTER WORKDIR] [-v]\n");
+		return 2;
+	}
+	pluginPath = argv[1];
+	// the control port symbols from the bundle's TTL (next to the binary)
+	char ttl[4096];
+	snprintf (ttl, sizeof ttl, "%s", pluginPath);
+	char *slash = strrchr (ttl, '/');
+	snprintf (slash ? slash + 1 : ttl, sizeof ttl - (size_t) (slash ? slash + 1 - ttl : 0), "edrumsynth.ttl");
+	th_load_symbols (ttl, EDS_PORT_CONTROL0, EDS_NUM_CONTROLS);
+
+	if (converter)
+	{
+		checkFactoryPresets ();
+		mkdirs (work);
+		checkConverter (converter, work);
+	}
+	else
+	{
+		checkRates ();
+		checkEngines ();
+		checkInactive ();
+		checkMidiModes ();
+	}
+
+	printf ("%s\n", th_failures ? "FAILED" : converter ? "all preset checks passed" : "all render checks passed");
 	return th_failures ? 1 : 0;
 }

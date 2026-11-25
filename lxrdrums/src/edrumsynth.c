@@ -4,11 +4,16 @@
  * instrument.
  *
  * - MIDI: General MIDI drum notes (notemap.h) trigger the tracks at their
- *   tuned pitch with the note's velocity; note-offs and CCs are ignored.
- *   time:Position sets the tempo the LFOs synchronize to.
- * - Control ports: one per engine parameter (ports.h, generated with the
- *   TTL by tools/gen_ttl.c); a parameter is set when its rounded value
- *   changes.
+ *   tuned pitch with the note's velocity, on every channel (MIDI mode Kit)
+ *   or on channel 10, channels 1-7 playing tracks 1-7 chromatically (Multi);
+ *   note-offs and CCs are ignored. time:Position sets the tempo the LFOs
+ *   synchronize to.
+ * - Control ports: one per engine parameter and engine family (ports.h,
+ *   generated with the TTL by tools/gen_ttl.c); a parameter is set when its
+ *   rounded value changes, and only from the ports of the engine its slot
+ *   runs. An engine selector per slot: on a change the engine switches the
+ *   slot (and resets its parameters), then the ports are sent again where
+ *   they differ from the engine's values, so the ports win.
  * - Audio: the engine renders 64-frame blocks at 44.1 kHz, rendered when the
  *   output needs them; at other host rates through the resampler.
  * - Events take effect at the next engine block: the 64-frame grid of the
@@ -44,6 +49,8 @@ typedef struct
 	float *out[2];
 	const float *control[EDS_NUM_CONTROLS];
 	uint8_t value[EDS_NUM_CONTROLS];	// the engine's value of each port
+	uint8_t engine[EDS_SLOTS + 1];		// each slot's engine; [EDS_GLOBAL]: 0
+	uint8_t midiMode;			// 0 kit, 1 multi
 
 	struct
 	{
@@ -115,16 +122,55 @@ static void renderAudio (EDrumSynth *s, uint32_t from, uint32_t to)
 	}
 }
 
-// the control ports whose value changed; the modulation targets after the
-// others (a target takes the value its parameter has then)
+static int roundPort (float v)
+{
+	return (int) (v >= 0.f ? v + 0.5f : v - 0.5f);
+}
+
+// the engine of each slot first: a switch resets the slot's parameters (and
+// turns off modulation targets on its engine specific ones), so the cache
+// is reloaded from the engine and the ports are sent again where they
+// differ. Then the control ports whose value changed, of the engines the
+// slots run; the modulation targets after the others (a target takes the
+// value its parameter has then)
 static void applyControls (EDrumSynth *s)
 {
+	int switched = 0;
+	for (int slot = 0; slot < EDS_SLOTS; slot++)
+	{
+		const float *port = s->control[eds_engine_controls[slot]];
+		if (!port || !(*port == *port))
+		{
+			continue;
+		}
+		int e = roundPort (*port);
+		e = e < 0 ? 0 : e > 3 ? 3 : e;
+		if (e != s->engine[slot])
+		{
+			lxr_engine_set_engine ((uint8_t) slot, (uint8_t) e);
+			s->engine[slot] = (uint8_t) e;
+			switched = 1;
+		}
+	}
+	if (switched)
+	{
+		for (int i = 0; i < EDS_NUM_CONTROLS; i++)
+		{
+			s->value[i] = lxr_engine_get_parameter (eds_controls[i].param);
+		}
+	}
+	const float *mode = s->control[EDS_MIDI_MODE_CONTROL];
+	if (mode && *mode == *mode)
+	{
+		s->midiMode = roundPort (*mode) >= 1;
+	}
+
 	for (int pass = 0; pass <= 1; pass++)
 	{
 		for (int i = 0; i < EDS_NUM_CONTROLS; i++)
 		{
 			const eds_control *c = &eds_controls[i];
-			if (c->target != pass || !s->control[i])
+			if (c->target != pass || c->type != EDS_CTL_PARAM || !s->control[i] || !(c->engines >> s->engine[c->slot] & 1))
 			{
 				continue;
 			}
@@ -133,7 +179,7 @@ static void applyControls (EDrumSynth *s)
 			{
 				continue;	// NaN
 			}
-			int x = (int) (v >= 0.f ? v + 0.5f : v - 0.5f) + c->offset;
+			int x = roundPort (v) + c->offset;
 			x = x < c->min ? c->min : x > c->max ? c->max : x;
 			if ((uint8_t) x != s->value[i])
 			{
@@ -151,10 +197,11 @@ static void handleEvent (EDrumSynth *s, const LV2_Atom_Event *ev)
 		const uint8_t *const msg = (const uint8_t *) (ev + 1);
 		if (ev->body.size >= 3 && lv2_midi_message_type (msg) == LV2_MIDI_MSG_NOTE_ON && msg[2] > 0)
 		{
-			const int track = eds_note_track (msg[1]);
+			uint8_t pitch;
+			const int track = eds_note_trigger (s->midiMode, msg[0] & 0x0F, msg[1], &pitch);
 			if (track >= 0)
 			{
-				lxr_engine_trigger ((uint8_t) track, msg[2], LXR_ENGINE_NOTE);
+				lxr_engine_trigger ((uint8_t) track, msg[2], pitch);
 			}
 		}
 	}
@@ -252,6 +299,8 @@ static LV2_Handle instantiate (const LV2_Descriptor *descriptor, double rate, co
 	{
 		s->value[i] = lxr_engine_get_parameter (eds_controls[i].param);
 	}
+	lxr_engine_get_engines (s->engine);
+	s->engine[EDS_GLOBAL] = 0;
 	s->blockPos = LXR_ENGINE_BLOCK;
 	return s;
 }

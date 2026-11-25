@@ -1,11 +1,20 @@
 # sord_validate on the bundle with the LV2 specifications it uses
-# (-DSORD -DSPECS -DSCHEMA -DBUNDLE)
+# (-DSORD -DSPECS -DSCHEMA -DBUNDLE; -DDIR: a presets bundle's TTL files
+# too, checked with the plugin's)
 set (files)
-foreach (spec core atom midi urid time parameters port-groups port-props units log options buf-size ui patch state event schemas)
+foreach (spec core atom midi urid time parameters port-groups port-props units log options buf-size ui patch state event presets schemas)
 	file (GLOB ttl ${SPECS}/${spec}.lv2/*.ttl)
 	list (APPEND files ${ttl})
 endforeach ()
-execute_process (COMMAND ${SORD} ${files} ${SCHEMA} ${BUNDLE}/manifest.ttl ${BUNDLE}/edrumsynth.ttl
+set (FILES ${BUNDLE}/manifest.ttl ${BUNDLE}/edrumsynth.ttl ${BUNDLE}/presets.ttl)
+if (DIR)
+	file (GLOB extra ${DIR}/*.ttl)
+	if (NOT extra)
+		message (FATAL_ERROR "no TTL files in ${DIR}")
+	endif ()
+	list (APPEND FILES ${extra})
+endif ()
+execute_process (COMMAND ${SORD} ${files} ${SCHEMA} ${FILES}
 	RESULT_VARIABLE rc OUTPUT_VARIABLE out ERROR_VARIABLE err)
 message ("${out}${err}")
 if (NOT rc EQUAL 0 OR "${out}${err}" MATCHES "error:")

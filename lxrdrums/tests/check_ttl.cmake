@@ -1,12 +1,12 @@
-# the committed TTL and src/ports.h == what tools/gen_ttl.c writes now
+# the committed TTL, src/ports.h and tools/edrumsynth_ports.json == what tools/gen_ttl.c writes now
 # (-DGEN -DSRC -DOUT)
 file (MAKE_DIRECTORY ${OUT})
-execute_process (COMMAND ${GEN} ${OUT} ${OUT}/ports.h RESULT_VARIABLE rc)
+execute_process (COMMAND ${GEN} ${OUT} ${OUT}/ports.h ${OUT}/edrumsynth_ports.json RESULT_VARIABLE rc)
 if (NOT rc EQUAL 0)
 	message (FATAL_ERROR "gen_ttl failed")
 endif ()
 set (failed 0)
-foreach (pair "edrumsynth.lv2/manifest.ttl;manifest.ttl" "edrumsynth.lv2/edrumsynth.ttl;edrumsynth.ttl" "src/ports.h;ports.h")
+foreach (pair "edrumsynth.lv2/manifest.ttl;manifest.ttl" "edrumsynth.lv2/edrumsynth.ttl;edrumsynth.ttl" "edrumsynth.lv2/presets.ttl;presets.ttl" "src/ports.h;ports.h" "tools/edrumsynth_ports.json;edrumsynth_ports.json")
 	list (GET pair 0 committed)
 	list (GET pair 1 generated)
 	execute_process (COMMAND ${CMAKE_COMMAND} -E compare_files ${SRC}/${committed} ${OUT}/${generated} RESULT_VARIABLE rc)
