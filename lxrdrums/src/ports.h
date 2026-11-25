@@ -9,7 +9,7 @@
 #define EDS_PORT_OUT_L		1
 #define EDS_PORT_OUT_R		2
 #define EDS_PORT_CONTROL0	3
-#define EDS_NUM_CONTROLS	305
+#define EDS_NUM_CONTROLS	306
 #define EDS_NUM_PORTS		(EDS_PORT_CONTROL0 + EDS_NUM_CONTROLS)
 
 #define EDS_SLOTS		6
@@ -17,7 +17,7 @@
 #define EDS_ALL_ENGINES		0xf
 
 /* control types */
-enum { EDS_CTL_PARAM, EDS_CTL_ENGINE, EDS_CTL_MIDI_MODE };
+enum { EDS_CTL_PARAM, EDS_CTL_ENGINE, EDS_CTL_MIDI_MODE, EDS_CTL_LXR_CC };
 
 /* control port i (index EDS_PORT_CONTROL0 + i): type; EDS_CTL_PARAM:
    engine parameter param, value = round (port value) + offset, in
@@ -339,10 +339,12 @@ static const eds_control eds_controls[EDS_NUM_CONTROLS] = {
 	{ 302, 0,   1,  0, 0, 0, 6, 0xf, 0,    1.0f },	/* 305 master_limiter */
 	{ 114, 0, 127,  0, 0, 0, 6, 0xf, 1,  127.0f },	/* 306 master_sample_rate */
 	{   0, 0,   1,  0, 2, 0, 6, 0xf, 0,    0.0f },	/* 307 master_midi_mode */
+	{   0, 0,   1,  0, 3, 0, 6, 0xf, 0,    0.0f },	/* 308 master_lxr_cc */
 };
 
-/* the engine selector of each slot, the MIDI mode (control indices) */
+/* the engine selector of each slot, the MIDI mode, the LXR CC switch (control indices) */
 static const uint16_t eds_engine_controls[EDS_SLOTS] = { 0, 48, 96, 144, 192, 240 };
 #define EDS_MIDI_MODE_CONTROL	304
+#define EDS_LXR_CC_CONTROL	305
 
 #endif

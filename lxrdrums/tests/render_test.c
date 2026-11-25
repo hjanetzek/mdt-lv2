@@ -17,6 +17,9 @@
  * - MIDI modes: Kit ignores the channel; Multi plays channel 10 as the kit
  *   and channels 1-7 the tracks at the note's pitch (an octave up: twice
  *   the frequency), other channels not;
+ * - LXR CC: on, CCs and NRPNs on any channel render as the engine with
+ *   lxr_engine_midi_cc() (except the engine selection NRPN 98, dropped);
+ *   off, they change nothing;
  * - 48 kHz: no NaN, no clipping storm; the same signal for block sizes 1,
  *   64, 480, 960, 4096 and odd ones; the bass drum's pitch within 1 % of
  *   the 44.1 kHz render, its level within 0.5 dB;
@@ -96,6 +99,16 @@ typedef struct
 	const uint8_t *kit;	// the reference loads this kit (LXR_ENGINE_KIT bytes) instead of setting the controls
 	const uint8_t *kitEngines;
 } Scenario;
+
+// other MIDI messages (CCs) of the next renders (set before render(): the
+// forked renders inherit them), in time order
+typedef struct
+{
+	int frame44;
+	uint8_t msg[3];
+} Msg;
+static const Msg *ccMsgs;
+static int numCcMsgs;
 
 // the kit scenario: channel 10 (9)
 static const Note kitNotes[] = {
@@ -192,11 +205,21 @@ static void renderPlugin (const Scenario *sc, double rate, int block, Output *ou
 			}
 		}
 		th_seq_clear (seq);
+		int nextMsg = 0;
 		for (int i = 0; i < sc->numNotes; i++)
 		{
 			const int f = scaledFrame (sc->notes[i].frame44, rate);
 			if (f >= pos && f < pos + n)
 			{
+				// the CCs before this note first (the sequence is in time order)
+				for (; nextMsg < numCcMsgs && scaledFrame (ccMsgs[nextMsg].frame44, rate) < f; nextMsg++)
+				{
+					const int fm = scaledFrame (ccMsgs[nextMsg].frame44, rate);
+					if (fm >= pos)
+					{
+						th_seq_midi (seq, sizeof seqBuf, fm - pos, ccMsgs[nextMsg].msg, 3);
+					}
+				}
 				const uint8_t msg[3] = { (uint8_t) (LV2_MIDI_MSG_NOTE_ON | sc->notes[i].channel), sc->notes[i].note,
 							 sc->notes[i].velocity };
 				if (sc->tempoEvent && i == 0)
@@ -204,6 +227,14 @@ static void renderPlugin (const Scenario *sc, double rate, int block, Output *ou
 					th_seq_tempo (seq, sizeof seqBuf, f - pos, 120.f);
 				}
 				th_seq_midi (seq, sizeof seqBuf, f - pos, msg, 3);
+			}
+		}
+		for (; nextMsg < numCcMsgs; nextMsg++)
+		{
+			const int fm = scaledFrame (ccMsgs[nextMsg].frame44, rate);
+			if (fm >= pos && fm < pos + n)
+			{
+				th_seq_midi (seq, sizeof seqBuf, fm - pos, ccMsgs[nextMsg].msg, 3);
 			}
 		}
 		const double t0 = th_now ();
@@ -325,6 +356,26 @@ static void renderEngine (const Scenario *sc, Output *out)
 			engineApply (controls);
 		}
 		const int multi = roundValue (controls[EDS_MIDI_MODE_CONTROL]) == 1;
+		const int lxrCc = roundValue (controls[EDS_LXR_CC_CONTROL]) == 1;
+		// the CCs of this block (none share a block with a note in the
+		// scenarios): straight to the engine's MIDI implementation, without
+		// the engine selection NRPN (98)
+		static uint16_t nrpn;
+		for (int i = 0; i < numCcMsgs && lxrCc; i++)
+		{
+			const int f = ccMsgs[i].frame44;
+			const uint8_t *m = ccMsgs[i].msg;
+			if (f <= b * LXR_ENGINE_BLOCK && f > (b - 1) * LXR_ENGINE_BLOCK && (m[0] & 0xF0) == 0xB0)
+			{
+				if (m[1] == 99)
+					nrpn = (uint16_t) ((nrpn & 0x7F) | m[2] << 7);
+				else if (m[1] == 98)
+					nrpn = (uint16_t) ((nrpn & ~0x7F) | m[2]);
+				else if (m[1] == 6 && nrpn == 98)
+					continue;
+				lxr_engine_midi_cc (m[1], m[2]);
+			}
+		}
 		for (int i = 0; i < sc->numNotes; i++)
 		{
 			const Note *nt = &sc->notes[i];
@@ -598,6 +649,89 @@ static void checkMidiModes (void)
 	release (bdKit);
 	release (o60);
 	release (o72);
+}
+
+// ---- LXR CC ----
+
+// bass drum hits, CCs and NRPNs between them (never in a hit's engine
+// block): CC 51 = parameter 50 (bd_ampeg_decay), CC 38 = 37 (cutoff), NRPN
+// 69 = 197 (bd_trans_volume), NRPN 0 = 128 (bd_filter_drive), on several
+// channels; CC 0 / 1 (no parameter in the engine)
+static const Note ccNotes[] = { { 0, 36, 120, 9 }, { 8820, 36, 120, 9 }, { 17640, 36, 120, 9 }, { 26460, 36, 120, 9 },
+				{ 35280, 36, 120, 9 }, { 44100, 38, 120, 9 } };
+static const Msg ccLocks[] = {
+	{ 4410, { 0xB4, 51, 90 } },  { 4500, { 0xB0, 38, 40 } },	// decay, cutoff (channels 5, 1)
+	{ 13230, { 0xB9, 99, 0 } }, { 13231, { 0xB9, 98, 69 } }, { 13232, { 0xB9, 6, 110 } },	// NRPN 69 (transient volume)
+	{ 22050, { 0xBF, 51, 5 } },  { 22100, { 0xB2, 0, 3 } }, { 22150, { 0xB2, 1, 100 } },	// decay short; bank, mod wheel
+	{ 30870, { 0xB0, 99, 0 } }, { 30871, { 0xB0, 98, 0 } }, { 30872, { 0xB0, 6, 127 } },	// NRPN 0 (filter drive)
+	{ 30900, { 0xB3, 38, 127 } },
+};
+// the engine selection (NRPN 98: slot 1 to the snare engine) between the
+// same hits: dropped (the engine selector ports own it)
+static const Msg ccEngine[] = {
+	{ 4410, { 0xB0, 99, 0 } }, { 4411, { 0xB0, 98, 98 } }, { 4412, { 0xB0, 6, 1 } },
+	{ 13230, { 0xB0, 6, 2 } },	// data entry again: still NRPN 98
+};
+
+static void checkLxrCc (void)
+{
+	static const Control off[] = { { "bd_ampeg_decay", 40 } };
+	static const Control on[] = { { "bd_ampeg_decay", 40 }, { "master_lxr_cc", 1 } };
+	const Scenario sOff = { ccNotes, NELEM (ccNotes), NULL, 0, off, NELEM (off), NULL, 0, 1.2, 0, NULL, NULL };
+	const Scenario sOn = { ccNotes, NELEM (ccNotes), NULL, 0, on, NELEM (on), NULL, 0, 1.2, 0, NULL, NULL };
+
+	// without CCs: the switch alone changes nothing
+	ccMsgs = NULL;
+	numCcMsgs = 0;
+	Output *plain = render (&sOff, 44100, 256), *plainOn = render (&sOn, 44100, 256);
+	CHECK (th_identical (plain, plainOn), "LXR CC: the switch alone changes the output (frame %d)",
+	       th_first_difference (plain, plainOn));
+
+	// off: the CCs and NRPNs change nothing
+	ccMsgs = ccLocks;
+	numCcMsgs = NELEM (ccLocks);
+	Output *o = render (&sOff, 44100, 256);
+	CHECK (th_identical (plain, o), "LXR CC off: the CCs change the output (frame %d)", th_first_difference (plain, o));
+	release (o);
+
+	// on: as the engine driven by lxr_engine_midi_cc(), for several host
+	// blocks; and audibly different from off
+	Output *ref = render (&sOn, 44100, 0);
+	static const int blocks[] = { 1, 64, 256, 1001, 4096 };
+	for (int i = 0; i < NELEM (blocks); i++)
+	{
+		o = render (&sOn, 44100, blocks[i]);
+		CHECK (th_identical (o, ref), "LXR CC on, block %d: not the engine with lxr_engine_midi_cc() (frame %d)",
+		       blocks[i], th_first_difference (o, ref));
+		release (o);
+	}
+	const int diff = th_first_difference (ref, plain);
+	CHECK (diff > 4410 && diff < 4410 + 2 * 8820, "LXR CC on: the first CC isn't heard at the next hit (first difference "
+	       "at frame %d)", diff);
+	// the NRPNs: the renders differ from one with the CCs only
+	static const Msg ccOnly[] = { { 4410, { 0xB4, 51, 90 } }, { 4500, { 0xB0, 38, 40 } }, { 22050, { 0xBF, 51, 5 } },
+				      { 30900, { 0xB3, 38, 127 } } };
+	ccMsgs = ccOnly;
+	numCcMsgs = NELEM (ccOnly);
+	Output *noNrpn = render (&sOn, 44100, 256);
+	const int nrpnDiff = th_first_difference (ref, noNrpn);
+	CHECK (nrpnDiff > 13230 && nrpnDiff < 17640 + 4410, "LXR CC on: NRPN 69 isn't heard at the next hit (first difference "
+	       "at frame %d)", nrpnDiff);
+	printf ("LXR CC: first CC heard at frame %d, first NRPN at %d\n", diff, nrpnDiff);
+	release (noNrpn);
+	release (ref);
+
+	// the engine selection NRPN is dropped
+	ccMsgs = ccEngine;
+	numCcMsgs = NELEM (ccEngine);
+	o = render (&sOn, 44100, 256);
+	CHECK (th_identical (plain, o), "LXR CC on: NRPN 98 (engine selection) changes the output (frame %d)",
+	       th_first_difference (plain, o));
+	release (o);
+	release (plain);
+	release (plainOn);
+	ccMsgs = NULL;
+	numCcMsgs = 0;
 }
 
 // ---- presets ----
@@ -1023,6 +1157,7 @@ int main (int argc, char **argv)
 		checkEngines ();
 		checkInactive ();
 		checkMidiModes ();
+		checkLxrCc ();
 	}
 
 	printf ("%s\n", th_failures ? "FAILED" : converter ? "all preset checks passed" : "all render checks passed");

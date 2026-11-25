@@ -10,7 +10,7 @@
 # No architecture specific flags here: they come from the build (CFLAGS).
 
 cmake_minimum_required (VERSION 3.16)
-project (edrumsynth VERSION 0.1.0 LANGUAGES C)
+project (edrumsynth VERSION 0.2.0 LANGUAGES C)
 
 option (EDS_TESTS "build the tests (ctest)" ON)
 

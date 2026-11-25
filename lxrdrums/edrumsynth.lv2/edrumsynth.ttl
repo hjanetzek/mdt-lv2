@@ -436,7 +436,7 @@
 	] ;
 	doap:homepage <https://github.com/hjanetzek/mdt-lv2> ;
 	doap:shortdesc "Synthesized drums" ;
-	lv2:minorVersion 1 ;
+	lv2:minorVersion 2 ;
 	lv2:microVersion 0 ;
 	rdfs:comment "Synthesized drums: six voices (bass drum, two toms, snare, cymbal, hi-hat closed and open) from MicroDexed-touch's drum engine, the voices of the OpenElixir-02 firmware (based on the open source LXR V2 firmware by Erica Synths). Each voice runs a drum, snare, cymbal or hi-hat engine. General MIDI drum notes, or channels 1-7 playing the voices chromatically; every voice parameter as a control." ;
 	lv2:requiredFeature urid:map ;
@@ -4029,4 +4029,16 @@
 		lv2:scalePoint [ rdfs:label "Kit" ; rdf:value 0 ] , [ rdfs:label "Multi" ; rdf:value 1 ] ;
 		pg:group <https://github.com/hjanetzek/mdt-lv2/edrumsynth#master> ;
 		lv2:displayPriority 96
+	] , [
+		a lv2:InputPort , lv2:ControlPort ;
+		lv2:index 308 ;
+		lv2:symbol "master_lxr_cc" ;
+		lv2:name "LXR CC" ;
+		rdfs:comment "On: CCs and NRPNs on any channel set engine parameters as the LXR's MIDI implementation (CC n: parameter n-1, NRPN n (CC 99, 98, 6): parameter 128+n; not the engine selection NRPN 98), without changing the controls; off: CCs are ignored" ;
+		lv2:default 0 ;
+		lv2:minimum 0 ;
+		lv2:maximum 1 ;
+		lv2:portProperty lv2:toggled ;
+		pg:group <https://github.com/hjanetzek/mdt-lv2/edrumsynth#master> ;
+		lv2:displayPriority 95
 	] .

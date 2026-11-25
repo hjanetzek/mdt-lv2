@@ -1,7 +1,10 @@
 # eDrumSynth
 
-Version 0.1.0 (v2: engines per voice slot, MIDI modes, kit presets and the
-kit converter; changes from 0.0.1: [Changes in 0.1.0](#changes-in-010)).
+Version 0.2.0 (v2.1: the "LXR CC" switch; v2: engines per voice slot, MIDI
+modes, kit presets and the kit converter; changes: [Changes in
+0.2.0](#changes-in-020), [Changes in 0.1.0](#changes-in-010)). The LXR
+project converter (patterns, songs and kits as a Zynthian snapshot):
+[LXR projects as Zynthian snapshots](#lxr-projects-as-zynthian-snapshots).
 
 Synthesized drums as an LV2 instrument: MicroDexed-touch's drum engine (the
 voices of the OpenElixir-02 firmware for the LXR-02 drum machine, based on
@@ -37,8 +40,8 @@ The Master group's **MIDI Mode** (`master_midi_mode`):
   open hi-hat), with the note's velocity; other channels are ignored. For a
   chain set to all MIDI channels ("ALL MIDI CHANNELS" in the chain options).
 
-Note-offs, other notes and CCs are ignored (Zynthian MIDI-learns the
-controls instead); `src/notemap.h`.
+Note-offs and other notes are ignored; CCs too unless the LXR CC switch is
+on (below; Zynthian MIDI-learns the controls instead); `src/notemap.h`.
 
 | Notes | Track |
 |---|---|
@@ -55,10 +58,36 @@ as the LXR); the timing doesn't depend on the host's block size. A
 `time:Position` with `time:beatsPerMinute` sets the tempo the LFOs' clock
 sync follows (else 120).
 
+## LXR CC: the LXR's CC / NRPN map
+
+The Master group's **LXR CC** (`master_lxr_cc`, a toggle, **off** by
+default). On, CCs and NRPNs on any channel set the engine's parameters as
+the LXR's MIDI implementation (`lxr_engine_midi_cc()`): CC n sets parameter
+n-1, NRPN n (CC 99 coarse, CC 98 fine, then data entry CC 6) parameter
+128 + n; CC 0 (bank select) and CC 1 (mod wheel) set nothing; the engine
+selection NRPN 98 (OpenElixir-02: value = slot * 4 + engine) is dropped,
+the engine selector ports own the engines. Off, CCs are ignored as before.
+
+A CC changes the engine, not the control: the ports keep their values, and
+the next change of a control (or of its voice's engine) wins. This is what
+the LXR's parameter locks need: the LXR project converter plays them as
+CC / NRPN events from zynseq, with the restores to the kit values as events
+too, and its snapshots turn the switch on.
+
+Why off by default: a Zynthian synth chain passes the sustain / sostenuto /
+soft / hold pedals (CC 64, 66, 67, 69) and, depending on its `cc_route`,
+keyboard CCs such as volume (7), pan (10), expression (11) and the panic
+messages (120-123, sent when chains are removed or stopped). With the
+switch on, each of them would set a drum parameter (CC 64 = parameter 63,
+CC 121 = 120, ...), changing the sound without any control showing it.
+Turn it on only where the CCs reaching the chain are meant for the engine
+(the converter's snapshots: the chain's `cc_route` lists exactly the
+locked CCs and 6, 98, 99).
+
 ## Ports and Zynthian pages
 
-Port 0 is the MIDI input, 1 and 2 the outputs (`pg:mainOutput`), 3..307 the
-305 controls: an engine selector per voice, every voice parameter of the
+Port 0 is the MIDI input, 1 and 2 the outputs (`pg:mainOutput`), 3..308 the
+306 controls: an engine selector per voice, every voice parameter of the
 engine's menu pages for every engine, the FX bus and the master
 parameters. One `pg:group` per voice sub page (and per engine family);
 Zynthian orders groups and controls by `lv2:displayPriority` and shows 4
@@ -78,7 +107,7 @@ controls per page ("Bass Drum LFO 1", "Bass Drum LFO 2"):
 | *Voice* Velocity: destination, amount, volume mod | 3 | 1 |
 | *Voice* LFO: frequency, clock sync, amount, waveform, retrigger, offset, destination voice and parameter | 8 | 2 |
 | FX Bus: type, dry/wet, audio out, distortion type, FX param 1-4, compressor ratio, ring mod waveform, delay mode | 11 | 3 |
-| Master: DJ filter, DJ resonance, limiter, sample rate (all voices), MIDI mode | 5 | 2 |
+| Master: DJ filter, DJ resonance, limiter, sample rate (all voices), MIDI mode, LXR CC | 6 | 2 |
 
 The voices in track order (bass drum, tom 1, tom 2, snare, cymbal, hi-hat),
 each 14 pages, then FX Bus and Master: 68 groups, 89 pages. The list:
@@ -121,7 +150,8 @@ so the two tracks still choke each other.
   `hh_ampeg_decay_open`, `bd_fm_amount`, `sd_noise_freq`, `fx_p1`,
   `master_limiter`; the velocity controls kept 0.0.1's `<voice>_mod_vel_*`).
   **They are API** (Zynthian presets, snapshots, MIDI learn):
-  `tests/symbols.txt` freezes them (for 0.1.0); never rename or remove one.
+  `tests/symbols.txt` freezes them (0.1.0, plus 0.2.0's `master_lxr_cc`);
+  never rename or remove one.
 - Types: numbers are integer ports in the engine's range; signed values
   (tuning, pan, DJ filter) centred on 0 (coarse -60..67, pan -63..64);
   on/off as `lv2:toggled`; menus (engines, waveforms, filter types, ...)
@@ -144,7 +174,7 @@ so the two tracks still choke each other.
 - `tools/edrumsynth_ports.json` (generated with the TTL) is the port map for
   tools: per control its symbol, index, engine parameter, slot, engines,
   range and value conversion (port value = engine value - offset), the
-  engine selectors and the MIDI mode port.
+  engine selectors, the MIDI mode port and the LXR CC port.
 
 ## Presets and kits
 
@@ -236,7 +266,10 @@ Tests (`ctest`; the validators are skipped when not installed):
   as the engine triggered directly; at 48 kHz blocks of 1, 64, 333, 480,
   960, 1001 and 4096 frames give the same signal, no NaN or clipping; the
   bass drum's pitch and level at 22.05 to 192 kHz match 44.1 kHz (1 %, 0.5
-  dB); a second instance is refused. It prints the CPU time per sample.
+  dB); a second instance is refused; LXR CC: off, CCs and NRPNs change
+  nothing; on, they render bit exact as the engine driven by
+  `lxr_engine_midi_cc()` (several host blocks, several channels), the
+  engine selection NRPN changes nothing. It prints the CPU time per sample.
 - `presets` (with Python 3): every factory preset sets exactly the kit
   controls, in range, and renders as the engine set up with its values
   ("Init" as the defaults); synthetic kits (a `/SYNTHKITS` tree with a bank
@@ -257,6 +290,14 @@ The tests don't run jalv or anything that creates a JACK client.
 `common/`) and its sha512sum line; `packaging/APKBUILD` is the draft recipe for nura-builds
 (`aports/lv2/edrumsynth-lv2/`, `arch="all"`, CMake, ctest in `check()`).
 
+## Changes in 0.2.0
+
+- The LXR CC switch (`master_lxr_cc`, Master group, off by default): CCs
+  and NRPNs to the engine as the LXR's MIDI implementation. A new port
+  (index 308) after the others: the existing indices and symbols are
+  unchanged.
+- The port map has `lxr_cc_port`.
+
 ## Changes in 0.1.0
 
 - Engines per voice slot (`<voice>_mix_engine`), the engine groups Mod EG,
@@ -275,8 +316,7 @@ The tests don't run jalv or anything that creates a JACK client.
 ## Open decisions
 
 - Kit morph (a second kit as LV2 state), the LO / HI outputs, a note map
-  control, the engine's own CC / NRPN map (planned as an "LXR CC" switch:
-  `CONVERTER_PLAN.md`).
+  control.
 - FX param 1-4 names (one meaning per FX type, static ports).
 - Zynthian enabling: an `engine_config.json` default (`"JV/eDrumSynth"`,
   `ENABLED`, `CAT: "Percussion"`).

@@ -6,7 +6,10 @@
  * - MIDI: General MIDI drum notes (notemap.h) trigger the tracks at their
  *   tuned pitch with the note's velocity, on every channel (MIDI mode Kit)
  *   or on channel 10, channels 1-7 playing tracks 1-7 chromatically (Multi);
- *   note-offs and CCs are ignored. time:Position sets the tempo the LFOs
+ *   note-offs are ignored. CCs and NRPNs on any channel set engine
+ *   parameters as the LXR's MIDI implementation when the "LXR CC" switch is
+ *   on (lxr_engine_midi_cc(); not the engine selection, which belongs to the
+ *   ports), else they are ignored. time:Position sets the tempo the LFOs
  *   synchronize to.
  * - Control ports: one per engine parameter and engine family (ports.h,
  *   generated with the TTL by tools/gen_ttl.c); a parameter is set when its
@@ -43,6 +46,15 @@
 
 #define ENGINE_RATE	44100.0
 
+// the LXR's MIDI implementation (lxr_engine_midi_cc()): CC 99 / 98 select
+// NRPN n, data entry CC 6 sets parameter 128 + n; NRPN 98 (PAR_SLOT_ENGINE,
+// OpenElixir-02) switches a slot's engine, which here belongs to the engine
+// selector ports: the plugin drops it
+#define CC_DATA_ENTRY	6
+#define CC_NRPN_FINE	98
+#define CC_NRPN_COARSE	99
+#define NRPN_ENGINE	98
+
 typedef struct
 {
 	const LV2_Atom_Sequence *midiIn;
@@ -51,6 +63,8 @@ typedef struct
 	uint8_t value[EDS_NUM_CONTROLS];	// the engine's value of each port
 	uint8_t engine[EDS_SLOTS + 1];		// each slot's engine; [EDS_GLOBAL]: 0
 	uint8_t midiMode;			// 0 kit, 1 multi
+	uint8_t lxrCc;				// CCs / NRPNs to the engine
+	uint16_t nrpn;				// the NRPN selected by CC 99 / 98 (as the engine's)
 
 	struct
 	{
@@ -164,6 +178,11 @@ static void applyControls (EDrumSynth *s)
 	{
 		s->midiMode = roundPort (*mode) >= 1;
 	}
+	const float *lxrCc = s->control[EDS_LXR_CC_CONTROL];
+	if (lxrCc && *lxrCc == *lxrCc)
+	{
+		s->lxrCc = *lxrCc > 0.5f;
+	}
 
 	for (int pass = 0; pass <= 1; pass++)
 	{
@@ -203,6 +222,25 @@ static void handleEvent (EDrumSynth *s, const LV2_Atom_Event *ev)
 			{
 				lxr_engine_trigger ((uint8_t) track, msg[2], pitch);
 			}
+		}
+		else if (ev->body.size >= 3 && lv2_midi_message_type (msg) == LV2_MIDI_MSG_CONTROLLER && s->lxrCc)
+		{
+			// a parameter change in the engine only: the ports keep their
+			// values (the next change of a port, or of its engine, wins)
+			const uint8_t cc = msg[1] & 0x7F, value = msg[2] & 0x7F;
+			if (cc == CC_NRPN_COARSE)
+			{
+				s->nrpn = (uint16_t) ((s->nrpn & 0x7F) | value << 7);
+			}
+			else if (cc == CC_NRPN_FINE)
+			{
+				s->nrpn = (uint16_t) ((s->nrpn & ~0x7F) | value);
+			}
+			else if (cc == CC_DATA_ENTRY && s->nrpn == NRPN_ENGINE)
+			{
+				return;
+			}
+			lxr_engine_midi_cc (cc, value);
 		}
 	}
 	else if (ev->body.type == s->uris.atomObject || ev->body.type == s->uris.atomBlank)
@@ -295,6 +333,9 @@ static LV2_Handle instantiate (const LV2_Descriptor *descriptor, double rate, co
 	// to the one stereo output)
 	lxr_engine_init ();
 	lxr_engine_set_split (LXR_SPLIT_KIT, 0);
+	// the engine's NRPN selection (a static of the engine) as the plugin's: 0
+	lxr_engine_midi_cc (CC_NRPN_COARSE, 0);
+	lxr_engine_midi_cc (CC_NRPN_FINE, 0);
 	for (int i = 0; i < EDS_NUM_CONTROLS; i++)
 	{
 		s->value[i] = lxr_engine_get_parameter (eds_controls[i].param);

@@ -1,5 +1,5 @@
 # eDrumSynth control port symbols: API (presets, snapshots, MIDI learn).
-# Frozen for 0.1.0 (0.1.0 renamed 16 symbols of 0.0.1: PLAN.md §14).
+# Frozen for 0.1.0 (0.1.0 renamed 16 symbols of 0.0.1: PLAN.md §14); 0.2.0 added master_lxr_cc.
 # Never remove or rename one; new ones are added here when released.
 bd_mix_engine
 bd_mix_volume
@@ -306,3 +306,4 @@ master_dj_reso
 master_limiter
 master_sample_rate
 master_midi_mode
+master_lxr_cc
