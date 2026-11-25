@@ -183,14 +183,14 @@ Writes `NNN-Name.zss` per project (or one for all given), and with
 8. zynthian-data: the `eDrumSynth` keymap entry (through the device-testing
    session / nura's zynthian-data package).
 
-## 7. Decisions for the user
+## 7. Decisions (2026-11-26)
 
-- Default layout: Multi (keeps step notes and lengths, chain on all
-  channels) or Kit (one pattern per LXR pattern, simpler to edit)?
-- Parameter locks via eDrumSynth v2.1's "LXR CC" switch: OK, off by
-  default, the snapshots turn it on (decided 2026-11-25).
-- Kit changes: ZS3 by program change events (measure the latency first) or
-  straight to an internal kit bank in eDrumSynth later?
-- Which projects to test with (the ones in `tmp/lxr`), and whether
-  generated snapshots of them may be installed on the phone (their kits and
-  patterns stay off git).
+- Default layout: **Multi** (Kit as an option).
+- Parameter locks via eDrumSynth v2.1's "LXR CC" switch, **off by default**;
+  the snapshots turn it on.
+- Kit changes: **measure the ZS3 latency first** (a test snapshot on the
+  phone), then decide between ZS3 by program change events and an internal
+  kit bank.
+- Test data: the projects in cynthian's `tmp/lxr` (never committed);
+  **snapshots generated from them may be installed on the phone**
+  (coordinated with the device-testing session).
