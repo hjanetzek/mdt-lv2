@@ -213,6 +213,72 @@ No kits are shipped (the LXR's and MDT's kit collections have their own
 licences). Kit parameters out of an engine's range (e.g. transient samples
 the LXR had loaded) take the init kit's value, as the engine does.
 
+## LXR projects as Zynthian snapshots
+
+`tools/lxr2zynthian.py` (Python 3, no dependencies; with
+`tools/lxrformat.py`, the LXR format, and `snd2lv2.py`'s kit mapping)
+turns LXR-02 / OpenElixir-02 project folders (`NN-*.PAT`, `NN-*.SND`,
+`NN-*.SNG`, `GLO.CFG`, `PRJ.NFO`) into Zynthian snapshots: load one and
+play the project's patterns from the launcher, its kits switched by ZS3s.
+
+```
+tools/lxr2zynthian.py PROJDIR [PROJDIR...] [--patterns N...] [--songs N...]
+                      [--mode multi|kit] [--name NAME] [--prog NNN] [--one]
+                      [--out DIR] [--presets] [--pc-events songs|all]
+                      [--install HOST [--bank BANK]] [-v]
+
+tools/lxr2zynthian.py /path/to/PROJ01 --prog 100 --out out --presets
+# out/100-Easy Yo.zss, out/eDrumSynth-Easy-Yo.presets.lv2
+scp "out/100-Easy Yo.zss" root@zynthian:/zynthian/zynthian-my-data/snapshots/000/
+scp -r out/eDrumSynth-Easy-Yo.presets.lv2 root@zynthian:/zynthian/zynthian-my-data/presets/lv2/
+```
+(`--install HOST` does the same copies with ssh / scp as root.)
+
+What a snapshot (schema 6, `NNN-Name.zss`, NNN = `--prog`) holds:
+
+- chain 1: eDrumSynth with its mixer strip; chain 0 the main mixbus.
+  **Multi** (default): MIDI Mode Multi, the chain on all MIDI channels, LXR
+  track n in launcher column n (MIDI channel n) with the step notes (the
+  pitch) and the track's own length; **Kit** (`--mode kit`): MIDI Mode
+  Kit, the chain on channel 10, one zynseq pattern per LXR pattern in
+  column 10 with General MIDI drum notes (step notes and track lengths are
+  lost; simpler to edit in Zynthian).
+- zynseq: one launcher row per pattern ("NN NAME"), then the songs as
+  rows chained by follow actions (the next row; at the end back to the
+  song's first row if it loops, else stop), sharing the patterns' zynseq
+  patterns. Tempo from `GLO.CFG`.
+- one ZS3 per pattern in pattern order (program change N = the N-th
+  pattern, `"*/N"`): the pattern's kit as all eDrumSynth controls (no
+  preset, no plugin reload) and its launcher row selected. Step through
+  them with `zs3_next` / `zs3_prev` or program changes to browse the
+  patterns with their kits, then launch the row. zs3-0 = the first
+  pattern.
+- eDrumSynth's [LXR CC](#lxr-cc-the-lxrs-cc--nrpn-map) switch on, the
+  chain's `cc_route` = the CCs the locks use and 6, 98, 99.
+
+Steps: velocity, step notes (Multi), probability (zynseq's event chance),
+flams (stutter: 2..8 hits in the step), shift (the event offset in eighths
+of a step), shuffle (the pattern's swing: every second 16th later by up
+to 2/3 of a step, as the LXR's shuffle delay; zynseq's swing 1.0 is half a
+step, so shuffle above 95 is limited), parameter locks (CC / NRPN events,
+restored to the kit value when the track's next step plays, as the LXR;
+one the next played step of which is after the loop is restored at the
+pattern's last step, so it is restored when the launcher changes the
+pattern too). Track lengths: Multi keeps multiples of 4 steps as the
+zynseq pattern's length (they run against each other as on the LXR);
+others are unrolled to the pattern's bars (restarting with it), as Kit
+mode does with every track.
+
+`--pc-events songs` adds a program change event (column 16, MIDI channel
+16) at the last step of a song row whose next row has another kit, so the
+kit follows the song (the ZS3 lands tens of milliseconds after the event:
+the UI applies it); `all` also at step 0 of each pattern's row (it reloads
+the ZS3 at every loop). `--one` puts several projects into one snapshot
+(rows and ZS3s named with the project, each row with its project's tempo).
+`-v` lists every step feature that isn't converted; the counts are always
+printed. What isn't converted and why, and the factory projects' counts:
+`CONVERTER_PLAN.md` §8.
+
 ## Audio
 
 The engine renders 64-frame blocks of 16 bit stereo at a fixed 44.1 kHz
@@ -278,6 +344,16 @@ Tests (`ctest`; the validators are skipped when not installed):
   preset renders bit exact as the engine with the kit loaded directly
   (`lxr_engine_load_kit_engines()`). `sord_validate_converted` validates
   the converted bundle.
+- `converter` (with Python 3; `tests/converter_test.py`): synthetic LXR
+  projects written by the test (patterns V1-V3, songs with end and loop,
+  kits with and without the engine block, a short kit): the parser, the
+  mapping per feature against the expected zynseq events, the ZS3s and
+  songs; the snapshot's keys against zynthian-ui's
+  `zynthian_state_schema.py` (`ZYNTHIAN_UI`, default
+  `~/bastel/github/zynthian-ui`), and the zynseq JSON through the real
+  `libzynseq.so` (`setState`, `getState`, compared; `EDS_LIBZYNSEQ` or
+  zynthian-ui's build folders; the library is loaded in a child process
+  without `init()`, so no JACK client), each skipped when not there.
 - `resampler`: sines through the resampler (44.1 -> 48, 47.999, 96, 32
   kHz): gain, phase, and the rest (aliasing, images, noise) below -80 dB.
 
@@ -297,6 +373,8 @@ The tests don't run jalv or anything that creates a JACK client.
   (index 308) after the others: the existing indices and symbols are
   unchanged.
 - The port map has `lxr_cc_port`.
+- `tools/lxr2zynthian.py` and `tools/lxrformat.py`: LXR projects as
+  Zynthian snapshots (tools only: not installed with the plugin).
 
 ## Changes in 0.1.0
 

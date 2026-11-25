@@ -592,3 +592,15 @@ Where the implementation settles or differs from §13:
   A v1 quirk kept: the FX bus' modulation targets are labelled with the
   bass drum ("BD FX Param 1"), as the engine's target table groups them.
 
+## 15. v2.1 (0.2.0, 2026-11-26): the LXR CC switch
+
+`master_lxr_cc` (Master group, a toggle, off by default): CCs and NRPNs on
+any channel to `lxr_engine_midi_cc()` (CC n = parameter n-1, NRPN n =
+128+n), except the engine selection NRPN 98 (the selector ports own the
+engines); the ports keep their values. Off by default because a Zynthian
+chain passes pedal (64, 66, 67, 69), keyboard (7, 10, 11) and panic
+(120-123) CCs that would change drum parameters unseen. For the LXR
+project converter's parameter locks (`CONVERTER_PLAN.md`, its §8 has the
+implementation notes). Port 308 after the others, symbol frozen; tests in
+the render test (bit exact against the engine driven directly).
+

@@ -8,8 +8,12 @@ chains, kits switched by ZS3s (sub-snapshots: controller values, no plugin
 reload). Plus the kits as an LV2 presets bundle for use without the
 snapshot.
 
-Status: plan (2026-11-25). Depends on eDrumSynth v2 (`PLAN.md` §13: engines
-per slot, Multi MIDI mode, kit converter) and a small v2.1 addition (§4.3).
+Status: implemented, desktop-tested (2026-11-26): eDrumSynth 0.2.0 (the
+LXR CC switch, §4.3), `tools/lxrformat.py`, `tools/lxr2zynthian.py`,
+`tests/converter_test.py`; the implementation notes, deviations and the
+factory projects' counts: §8. Next: the phone (§5's last item, with the
+device-testing session). Plan of 2026-11-25; depends on eDrumSynth v2
+(`PLAN.md` §13).
 
 ## 1. Facts
 
@@ -197,3 +201,163 @@ Writes `NNN-Name.zss` per project (or one for all given), and with
 - Test data: the projects in cynthian's `tmp/lxr` (never committed);
   **snapshots generated from them may be installed on the phone**
   (coordinated with the device-testing session).
+
+## 8. Implementation notes (2026-11-26)
+
+Where the implementation settles or differs from §1-§7:
+
+- **eDrumSynth 0.2.0** (not 0.1.1: a new port is a minor version in LV2's
+  rules): `master_lxr_cc`, a toggle in the Master group after MIDI Mode,
+  index 308 (all others unchanged), frozen in `tests/symbols.txt`; the
+  port map has `lxr_cc_port`. On: CCs and NRPNs on any channel go to
+  `lxr_engine_midi_cc()`, except the **engine selection NRPN 98**
+  (OpenElixir-02's value = slot * 4 + engine), which the plugin drops: the
+  engine selector ports own the engines (a switch by NRPN would reset the
+  slot behind the ports' backs and the next `run()` would switch it back).
+  The plugin keeps its own copy of the NRPN selection to know it. A CC
+  changes only the engine, the port cache stays: the next port change
+  wins; a port reloaded with an unchanged value (a ZS3 with the same kit)
+  doesn't undo a CC, which is why the converter writes the restores.
+  render test: off changes nothing; on is bit exact against the engine
+  driven by `lxr_engine_midi_cc()` for host blocks 1-4096; the engine
+  NRPN changes nothing.
+- **ZS3s: one per pattern** (decided 2026-11-26, replacing §3's "a ZS3 per
+  kit"): ids `"*/N"` in pattern order (N = the pattern's index in the
+  snapshot, so dict order, `zs3_next` / `zs3_prev` and program change N
+  agree), title "NN NAME", the pattern's kit as every eDrumSynth control
+  (`preset_info` null; the master controls: DJ filter / reso / limiter at
+  their defaults, MIDI Mode, LXR CC on), `active_phrase` its launcher row,
+  chain 1 with `midi_chan`, `midi_in`, `audio_in`, `audio_out`; no
+  `global` / `midi_capture`. zs3-0 = the first pattern's plus the tempo
+  (processor -4: `bpm`, `bpb`); `last_zs3_id` = the first pattern's, so
+  `zs3_next` goes to the second. Patterns used only by songs (not in
+  `--patterns`) get ZS3s after the others, selecting their first song row.
+  More than 128 patterns (`--one`): the rest as `"zs3-N"` (stepping only).
+  Chain 0 is in no ZS3: Zynthian's default for the main mixbus output
+  stays (a generated snapshot shouldn't name the device's playback ports).
+- **Program change events: optional** (`--pc-events`, default off; the
+  latency test of §7's first version dropped). `songs`: a PC (cmd 192) at
+  the last step of a song row whose next row (the first, when looping) has
+  another kit; `all`: also at step 0 of each pattern's own row (reloads
+  the ZS3 at each loop). They sit in a column of their own (16, MIDI
+  channel 16: `"16/N"` isn't a ZS3, so Zynthian falls back to `"*/N"`)
+  with a pattern per row, so the patterns shared with the launcher rows
+  carry no PCs.
+- **Rows and columns**: launcher rows' children loop (repeat 255), the
+  row's `repeat` = the pattern's bars, no follow action (Zynthian's own
+  rows likewise). Every track column (Multi 1-7, Kit 10) is present with a
+  non-zero repeat in every row, also when the pattern doesn't use the
+  track (the library's empty default pattern): starting a row doesn't stop
+  the previous row's children, only sequences of the same group replace
+  each other, so an unused column would keep playing the previous
+  pattern's track. Song rows' children play `ceil(row / track length)`
+  times (a native 12-step track plays 24 steps in a 16-step row and is
+  replaced at the next row's start), the song's last row of a non-looping
+  song then stops; a looping one-row song's children loop. Song rows
+  reference the launcher rows' zynseq pattern ids (editing one edits
+  both).
+- **Locks, as the LXR's source** (`autoNode_setDestination()`: the restore
+  happens at the track's next *played* step, whether it has a lock or not;
+  §1 said "the next step with a lock"): lock -> CC n / NRPN n - 128 (99 =
+  0, 98, 6) at its step, before the note; restore to the kit's value
+  (the engine's: out of range kit values as the init kit's, as the kit
+  presets) at the next played step unless that step locks the same
+  parameter. A lock whose next played step is after the loop is restored
+  at the pattern's last step (offset 7/8 step), so changing the pattern
+  restores it too ("restore at the pattern end"); a lock on the last step
+  itself can only be restored at the loop (counted). Locks on steps that
+  don't play are ignored (the LXR parses locks when a step plays), counted.
+  Probability skips only notes in zynseq: locks and restores of a step that
+  doesn't play by chance still happen (the LXR skips them); not counted.
+- **zynseq's one-event rule**: events with the same command and value 1 at
+  one step replace each other, whatever their offset. So per step one
+  value per CC and **one NRPN**: a lock beats a restore; of two NRPN locks
+  at one step (two lock slots, or two tracks in Kit mode) the later stays;
+  an NRPN restore that meets another NRPN is dropped; all counted. Events
+  of a step are written NRPN (99, 98, 6), CCs, notes: zynseq plays a
+  step's events in list order (the schedule is a multimap by time, equal
+  times in insertion order), so the NRPN arrives complete and before the
+  note. Overlapping notes of one note number (a shift onto a step with the
+  same note) keep the first, counted.
+- **Flams**: the LXR's x2..x8 = 2..8 evenly spaced hits in the step
+  (`flamIdxToPattern()`); zynseq's stutter alternates note-off / note-on
+  every 1/s step, so stutter speed s = 2 * hits (checked in the tests).
+  **Shift**: offset +n/8 step; negative: the previous step (wrapping in the
+  track) at 1 - n/8. No flams or shifts in the factory projects.
+- **Shuffle -> swing**: the LXR (stock firmware's sync path, the one
+  without sub steps) delays every second 16th by shuffle / 127 * 2/3 of a
+  step (`seq_getDeltaTShuffleDelay()` in 0.25 ms ticks); zynseq's swing
+  (swingDiv 1) delays every second step by swing / 2 steps, so swing =
+  shuffle * 4 / 3 / 127, limited to 1.0 (shuffle above 95, counted). The
+  table `seq_shuffleTable` of §3 belongs to the old 128 sub step
+  sequencer and isn't used. Swing applies to notes only (locks of a swung
+  step come slightly before its note: harmless). Not checked by ear.
+- **Lengths**: the pattern's length = its longest track rounded up to whole
+  bars (as lxr2mdt.py); track length 0 = 16. Multi: lengths in multiples
+  of 4 steps are native (zynseq patterns are whole beats), others unrolled
+  to the pattern's length (restarting with it; counted when the length
+  doesn't divide it). Kit: every track tiled into the one pattern.
+- **Step notes in Kit mode**: lost (counted per step). In Multi the note
+  is the track channel's note (60 = the tuned pitch; the factory projects
+  store 63 on most steps, played as on the LXR).
+- **Locks on CC 0** (bank select, no parameter in the LXR or the engine):
+  left out, counted.
+- **Kits**: a pattern's missing kit file: the init kit (the port defaults;
+  restores to the init kit's values), counted. Placeholder kits are kept
+  when a pattern uses them (only `--presets` leaves them out, as
+  snd2lv2.py).
+- **Several projects** (`--one`): one snapshot, rows and ZS3s named with
+  the project, each row with its project's tempo (`tempo` override) when
+  the tempos differ; otherwise one snapshot per project, `--prog`
+  counting up.
+- **Not done**: `--install` runs ssh / scp as written but wasn't run
+  against a device; the `eDrumSynth` keymap entry in zynthian-data (§6.8,
+  only useful for Kit mode's row names); a kits-only project (no patterns)
+  makes no snapshot (use snd2lv2.py).
+- **Tests** (`ctest`: `converter`): synthetic projects only; the zynseq
+  JSON round trip through the real `libzynseq.so` (built from zynthian-ui
+  on the desktop: `cmake -S zynlibs/zynseq -B build && cmake --build
+  build`, then `EDS_LIBZYNSEQ=build/libzynseq.so`; only `setState` /
+  `getState`, without `init()`: no JACK client) is equal for every
+  pattern, row and column, apart from: patterns without events are not
+  kept by the library (empty columns get its default pattern), and the
+  event chance comes back truncated (`int(float(c / 100) * 100)`: 33 can
+  return as 32; the comparison allows 1). The real factory snapshots
+  (below) went through it too (both modes, `--one`, `--pc-events all`).
+
+### Real projects (cynthian's `tmp/lxr`, 2026-11-26; read only, output in scratch)
+
+Factory PROJ01-05, HRTL UNTZKITS (PROJ00) and the DLC demo project, one
+snapshot each, Multi (`--presets`):
+
+| Project | Patterns | Kits (ZS3 kits) | zynseq patterns | Presets | BPM |
+|---|---|---|---|---|---|
+| PROJ01 Easy Yo | 8 | 7 | 55 | 8 | 92 |
+| PROJ02 P0$T IDM | 9 | 4 | 47 | 5 | 202 |
+| PROJ03 SpainDub | 4 | 2 | 27 | 3 | 50 |
+| PROJ04 Hrtlevel | 16 | 13 | 110 | 14 | 148 |
+| PROJ05 Beatsies | 9 | 9 | 61 | 9 | 120 |
+| UNTZKITS | 16 | 16 | 112 | 16 | 132 |
+| DLCprjct | 16 | 16 | 108 | 16 | 132 |
+| all | 78 | 67 | 520 | 71 | |
+
+Songs: none (every `.SNG` in these projects is empty, as lxr2mdt.py
+found). The DLC kits-only project has no patterns. Snapshots 76-311 KB (compact JSON; most of it the ZS3s' 306 controllers each).
+
+In the 78 patterns: 407 locks on played steps (23 of them NRPNs, never
+two NRPNs at one step), 312 steps with a probability below 100 %, 3
+patterns with shuffle (all within the swing range); no flams, no shifts;
+every kit present. Not converted (Multi; `-v` for each):
+
+| What | Count |
+|---|---|
+| track lengths that aren't multiples of 4 steps (unrolled, restarting with the pattern) | 55 |
+| parameter locks on steps that don't play (ignored, as the LXR) | 44 |
+| locks on the pattern's last step (restored at the loop only) | 8 |
+| locks on CC 0 (no parameter) | 6 |
+
+Kit mode instead: step notes 5276 steps (the factory projects' 63s),
+tracks not dividing the pattern 66, the same locks. The `--one` snapshots
+of all 78 patterns (1.3 MB Multi) round-trip through libzynseq in both
+modes.
+

@@ -26,6 +26,7 @@ import sys
 import tempfile
 import unittest
 
+sys.dont_write_bytecode = True     # no __pycache__ in the source tree
 HERE = os.path.dirname(os.path.abspath(__file__))
 TOOLS = os.path.join(HERE, "..", "tools")
 sys.path.insert(0, TOOLS)

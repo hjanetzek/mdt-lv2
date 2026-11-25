@@ -5,7 +5,7 @@ postmarketOS / nura armv7 (Cortex-A7, the Galaxy S III Neo), built by nura's
 CI for armv7, aarch64 and x86_64. Each plugin is a directory here with its
 own plan; this file is the roadmap and the conventions they share.
 
-Status (2026-11-23):
+Status (2026-11-26):
 - `lxrdrums/`: **eDrumSynth** (the LXR drum engine). Done: desktop tests,
   armv7 package, phone benchmark (12 % of a Cortex-A7 core at 48 kHz),
   published by nura's CI for armv7, aarch64 and x86_64
@@ -13,8 +13,12 @@ Status (2026-11-23):
   zynthian-sys-config r3). Plan: `lxrdrums/PLAN.md`.
   v2 / 0.1.0 (desktop-tested 2026-11-25): engines per voice slot, MIDI
   modes Kit / Multi, factory presets, `tools/snd2lv2.py` (.snd kits to an
-  LV2 presets bundle), the port map `tools/edrumsynth_ports.json`; next:
-  armv7 package and phone check, recipe bump.
+  LV2 presets bundle), the port map `tools/edrumsynth_ports.json`.
+  v2.1 / 0.2.0 (desktop-tested 2026-11-26): the "LXR CC" switch, and
+  `tools/lxr2zynthian.py`: LXR projects as Zynthian snapshots (zynseq
+  launcher rows and songs, a ZS3 per pattern with its kit; plan and notes
+  `lxrdrums/CONVERTER_PLAN.md`); next: armv7 package and phone check (also
+  of the snapshots), recipe bump to 0.2.0.
 - `va/`: **mTrio** and **mAnalog** (MDT's Trio and Analog synths, §4.1).
   Done: desktop build and tests (bit exact against MDT at 44.1 kHz, engine
   at the host rate, no resampler), presets, draft APKBUILD (`mdt-va-lv2`).
