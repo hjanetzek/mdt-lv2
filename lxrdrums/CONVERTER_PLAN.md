@@ -188,9 +188,12 @@ Writes `NNN-Name.zss` per project (or one for all given), and with
 - Default layout: **Multi** (Kit as an option).
 - Parameter locks via eDrumSynth v2.1's "LXR CC" switch, **off by default**;
   the snapshots turn it on.
-- Kit changes: **measure the ZS3 latency first** (a test snapshot on the
-  phone), then decide between ZS3 by program change events and an internal
-  kit bank.
+- Kit changes: **ZS3s, decided** (2026-11-26; no latency measurement, no
+  internal kit bank): they are the only way to switch kits while browsing
+  sequences without reloading the plugin. One ZS3 per pattern ("NN NAME":
+  the pattern's kit controllers, `active_phrase` = its launcher row), in
+  pattern order, so `zs3_next` / `zs3_prev` (or program changes) browse the
+  patterns; program change events inside patterns stay optional.
 - Test data: the projects in cynthian's `tmp/lxr` (never committed);
   **snapshots generated from them may be installed on the phone**
   (coordinated with the device-testing session).
