@@ -154,6 +154,22 @@ if (EDS_TESTS AND NOT CMAKE_CROSSCOMPILING)
 	add_dependencies (render_test edrumsynth)
 	add_test (NAME render COMMAND render_test $<TARGET_FILE:edrumsynth>)
 
+	# the factory presets, and the kit converter's round trip (synthetic
+	# kits; its bundle validated as the plugin's)
+	find_package (Python3 COMPONENTS Interpreter)
+	if (Python3_Interpreter_FOUND)
+		set (PRESETS_WORK ${CMAKE_CURRENT_BINARY_DIR}/presets_test)
+		add_test (NAME presets COMMAND render_test $<TARGET_FILE:edrumsynth> --presets
+			"${Python3_EXECUTABLE} -I ${CMAKE_CURRENT_SOURCE_DIR}/tools/snd2lv2.py" ${PRESETS_WORK})
+		set_tests_properties (presets PROPERTIES FIXTURES_SETUP converted_kits)
+		if (SORD_VALIDATE AND EXISTS ${LV2_SPEC_DIR}/core.lv2)
+			add_test (NAME sord_validate_converted COMMAND ${CMAKE_COMMAND}
+				-DSORD=${SORD_VALIDATE} -DSPECS=${LV2_SPEC_DIR} -DSCHEMA=${COMMON}/zynthian-schema.ttl
+				-DBUNDLE=${BUNDLE_DIR} -DDIR=${PRESETS_WORK}/kits.lv2 -P ${TESTS}/check_sord.cmake)
+			set_tests_properties (sord_validate_converted PROPERTIES FIXTURES_REQUIRED converted_kits)
+		endif ()
+	endif ()
+
 	add_executable (resampler_test tests/resampler_test.c src/resampler.c)
 	target_include_directories (resampler_test PRIVATE src)
 	if (MATH_LIBRARY)
