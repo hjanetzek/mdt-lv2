@@ -722,14 +722,16 @@ typedef struct
 	const char *dir, *file, *name;
 	uint8_t engines[EDS_SLOTS];
 	int withBlock;		// the OpenElixir-02 engine block (else: an LXR kit, stock engines)
+	int numParams;		// in the file (fewer: an older LXR kit), 0: all
 	unsigned seed;
 	uint8_t params[256];	// written
 } Kit;
 
 static Kit kits[] = {
-	{ "SYNTHKITS", "00-USER1.snd", "USER 1", { 1, 2, 3, 0, 0, 1 }, 1, 1, { 0 } },
-	{ "SYNTHKITS/BANKA", "01-METAL.snd", "METAL", { 3, 2, 2, 3, 2, 0 }, 1, 2, { 0 } },
-	{ "SYNTHKITS/BANKA", "02-LXR.SND", "LXR KIT", { 0, 0, 0, 1, 2, 3 }, 0, 3, { 0 } },
+	{ "SYNTHKITS", "00-USER1.snd", "USER 1", { 1, 2, 3, 0, 0, 1 }, 1, 0, 1, { 0 } },
+	{ "SYNTHKITS/BANKA", "01-METAL.snd", "METAL", { 3, 2, 2, 3, 2, 0 }, 1, 0, 2, { 0 } },
+	{ "SYNTHKITS/BANKA", "02-LXR.SND", "LXR KIT", { 0, 0, 0, 1, 2, 3 }, 0, 0, 3, { 0 } },
+	{ "SYNTHKITS/BANKA", "05-OLD.SND", "OLD KIT", { 0, 0, 0, 1, 2, 3 }, 0, 205, 4, { 0 } },
 };
 
 static unsigned lcg (unsigned *s)
@@ -777,6 +779,12 @@ static void makeKit (void *arg, th_output *out)
 	uint8_t engines[EDS_SLOTS];
 	lxr_engine_get_engines (engines);
 	size_t length = KIT_NAME + size;
+	if (k->numParams)
+	{
+		// an older kit: the parameters after numParams are 0 when loaded
+		length = KIT_NAME + (size_t) k->numParams;
+		memset (data + length, 0, size - (size_t) k->numParams);
+	}
 	if (k->withBlock)
 	{
 		length += lxr_engine_encode_engines (engines, data + length);
@@ -842,7 +850,7 @@ static void checkConverter (const char *converter, const char *work)
 	const int rc = system (cmd);
 	CHECK (rc == 0, "%s: exit status %d", cmd, rc);
 
-	// the manifest: two banks, three presets
+	// the manifest: two banks, a preset per kit
 	snprintf (path, sizeof path, "%s/kits.lv2/manifest.ttl", work);
 	FILE *f = fopen (path, "r");
 	CHECK (f != NULL, "no %s", path);

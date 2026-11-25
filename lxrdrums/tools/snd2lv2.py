@@ -9,7 +9,8 @@ with kits becomes a preset bank (pset:Bank, named after the folder), every
 kit a preset ("NN NAME": the slot number of the file name NN-NAME.snd and
 the kit's name). A kit file is the 8-byte name, the 247 sound parameters
 and, from OpenElixir-02, its engine block ("OE02", the engine of each
-slot); kits without one have the stock engines.
+slot); kits without one have the stock engines. Older LXR kits with fewer
+parameters load with the missing ones 0, as in the engine.
 
 The bundle (default: edrumsynth-<name of the first PATH>.presets.lv2 here)
 is installed like any LV2 bundle: ~/.lv2/, or on Zynthian
@@ -33,6 +34,7 @@ import re
 import sys
 
 ENGINE_BLOCK = b"OE02"
+MIN_PARAMS = 128  # shorter files are not kits
 
 
 def load_ports(path):
@@ -71,9 +73,6 @@ def kit_values(m, params, engines, warn):
             warn("parameter %d (%s) = %d is out of range, %d used" % (p["param"], p["symbol"], x, p["kit_init"]))
             x = p["kit_init"]
         values[p["symbol"]] = x - p["offset"]
-    for par, init in m["unmapped_kit_params"].items():
-        if params[int(par)] != init:
-            warn("parameter %s (not a port) = %d is not converted" % (par, params[int(par)]))
     return values
 
 
@@ -87,9 +86,15 @@ def read_kit(m, path, keep_all, verbose):
     size = m["kit_name_size"] + m["kit_size"]
     with open(path, "rb") as f:
         data = f.read()
-    if len(data) < size:
+    if len(data) < m["kit_name_size"] + MIN_PARAMS:
         print("%s: not a kit (%d bytes)" % (path, len(data)), file=sys.stderr)
         return None
+    if len(data) < size:
+        # an older LXR kit: the missing parameters are 0 (as the engine and
+        # the LXR's preset_readDrumsetData() load it)
+        if verbose:
+            print("%s: %d parameters, the others 0" % (path, len(data) - m["kit_name_size"]), file=sys.stderr)
+        data = data + bytes(size - len(data))
     name = data[:m["kit_name_size"]].split(b"\0")[0].decode("latin1").strip()
     file_name = os.path.basename(path)
     if not keep_all and is_placeholder(file_name, name):
