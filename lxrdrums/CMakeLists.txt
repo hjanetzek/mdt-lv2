@@ -170,6 +170,14 @@ if (EDS_TESTS AND NOT CMAKE_CROSSCOMPILING)
 		endif ()
 	endif ()
 
+	# the LXR project converter (tools/lxrformat.py, tools/lxr2zynthian.py):
+	# synthetic projects; the snapshot's keys against a zynthian-ui checkout
+	# (ZYNTHIAN_UI) and the zynseq JSON through libzynseq.so (EDS_LIBZYNSEQ),
+	# each skipped when not there
+	if (Python3_Interpreter_FOUND)
+		add_test (NAME converter COMMAND ${Python3_EXECUTABLE} -I ${TESTS}/converter_test.py)
+	endif ()
+
 	add_executable (resampler_test tests/resampler_test.c src/resampler.c)
 	target_include_directories (resampler_test PRIVATE src)
 	if (MATH_LIBRARY)
