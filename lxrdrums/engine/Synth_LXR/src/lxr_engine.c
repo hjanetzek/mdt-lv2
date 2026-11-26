@@ -295,8 +295,23 @@ static uint8_t morphValue (uint16_t param)
 	return morphInterpolate (activeParameters[param], morphKit[param], morph);
 }
 
+// the slots of the sound parameters that hold MIDI state (NRPN data entry,
+// NRPN number, bank select), not sound: sent like the others they set an
+// NRPN number and write a value to that parameter (from 0: voice 1's filter
+// drive). Kept in the kit, not sent (as the LXR's morph, Erica Synths
+// 39928e1)
+static int isTransportParameter (uint16_t param)
+{
+	return    param == PAR_NRPN_DATA_ENTRY_COARSE || param == PAR_NRPN_FINE
+	       || param == PAR_NRPN_COARSE || param == PAR_BANK_CHANGE;
+}
+
 static void sendParameter (uint16_t param)
 {
+	if (isTransportParameter (param))
+	{
+		return;
+	}
 	frontPanel_sendData (param < 128 ? MIDI_CC : CC_2, param < 128 ? param : param - 128, morphValue (param));
 }
 

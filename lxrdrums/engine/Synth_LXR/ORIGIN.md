@@ -5,10 +5,11 @@
 from:
 
 - repository: MicroDexed-touch (https://codeberg.org/hjanetzek/MicroDexed-touch),
-  branch `circle-port` of the cynthian port
-- commit: `ca6518a82dec521f5f7798def5258d8ac9a18ee4` (2026-11-09)
-- last commit touching `third-party/Synth_LXR`: `198eaa955da1837a8f2e949726efb137943db98d`
-  ("Synth_LXR: two mixes (LO, HI) with a voice split")
+  branch `useq` of the cynthian port (rebased onto upstream 2.0.13)
+- commit: `1ed8cce5` (2026-11-26)
+- last commits touching `third-party/Synth_LXR`: `f2a9085b` ("Synth_LXR: don't
+  send the MIDI state slots of the sound parameters"), `1ed8cce5` ("Synth_LXR:
+  reset blown up filter states by their exponent bits (OpenElixir-02 2ef496e)")
 
 The plugin builds only `src/lxr_engine.c` (with `-std=gnu17 -I lxr -I lxr/shim`);
 `src/synth_lxr.cpp/.h` (the Teensy Audio object) and `library.json` are kept
