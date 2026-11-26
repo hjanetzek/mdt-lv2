@@ -17,6 +17,9 @@
  * - MIDI modes: Kit ignores the channel; Multi plays channel 10 as the kit
  *   and channels 1-7 the tracks at the note's pitch (an octave up: twice
  *   the frequency), other channels not;
+ * - a track's note 60 + k (Multi, its channel) renders exactly as its kit
+ *   note with the slot's tuning k semitones up (coarse, and the FM / mod
+ *   oscillators the note moves): every engine on every track;
  * - LXR CC: on, CCs and NRPNs on any channel render as the engine with
  *   lxr_engine_midi_cc() (except the engine selection NRPN 98, dropped);
  *   off, they change nothing;
@@ -651,6 +654,79 @@ static void checkMidiModes (void)
 	release (o72);
 }
 
+// ---- a constant step note folded into the tuning (the LXR project converter) ----
+
+// A track played at note 60 + k (Multi, its channel) renders exactly as the
+// kit note on channel 10 with the slot's tuning k semitones up: the coarse
+// tune and the other oscillators the trigger's note moves (osc_setBaseNote():
+// the drum engine's FM oscillator = FM Freq, the cymbal's and hi-hat's mod
+// oscillators = Mod Osc Freq 1 / 2; the snare engine moves only its main
+// oscillator). Every engine on every slot, the open hi-hat too.
+static void checkTuningFold (void)
+{
+	static const char *const prefixes[EDS_SLOTS] = { "bd", "t1", "t2", "sd", "cy", "hh" };
+	static const int shifts[] = { 3, -5, 12 };
+	int checked = 0;
+	for (int slot = 0; slot < EDS_SLOTS; slot++)
+	{
+		for (int e = 0; e < 4; e++)
+		{
+			for (int track = slot; track <= (slot == EDS_SLOTS - 1 ? 6 : slot); track++)
+			{
+				for (int s = 0; s < NELEM (shifts); s++)
+				{
+					const int k = shifts[s];
+					// the tuned controls (port values: engine value - 60) and
+					// whether the note moves them
+					char sym[4][32];
+					const float base[4] = { 5, 2, -3, 4 };
+					const int moved[4] = { 1, e == 0, e >= 2, e >= 2 };
+					snprintf (sym[0], sizeof sym[0], "%s_osc_coarse", prefixes[slot]);
+					snprintf (sym[1], sizeof sym[1], "%s_fm_freq", prefixes[slot]);
+					snprintf (sym[2], sizeof sym[2], "%s_modosc_freq1", prefixes[slot]);
+					snprintf (sym[3], sizeof sym[3], "%s_modosc_freq2", prefixes[slot]);
+					// the moved oscillators audible: FM amount, mod gains
+					char amt[3][32];
+					snprintf (amt[0], sizeof amt[0], "%s_fm_amount", prefixes[slot]);
+					snprintf (amt[1], sizeof amt[1], "%s_modosc_gain1", prefixes[slot]);
+					snprintf (amt[2], sizeof amt[2], "%s_modosc_gain2", prefixes[slot]);
+					Control played[12], folded[12];
+					int n = 0;
+					for (int i = 0; i < 3; i++, n++)
+					{
+						played[n] = folded[n] = (Control) { amt[i], 80 };
+					}
+					played[n] = folded[n] = (Control) { "master_midi_mode", 1 };
+					n++;
+					played[n] = folded[n] = (Control) { symbolOf (eds_engine_controls[slot]), (float) e };
+					n++;
+					for (int i = 0; i < 4; i++, n++)
+					{
+						played[n] = (Control) { sym[i], base[i] };
+						folded[n] = (Control) { sym[i], base[i] + (moved[i] ? (float) k : 0.f) };
+					}
+					const Note np[] = { { 0, (uint8_t) (60 + k), 127, (uint8_t) track },
+							    { 9000, (uint8_t) (60 + k), 70, (uint8_t) track } };
+					const Note nf[] = { { 0, trackNotes[track], 127, 9 }, { 9000, trackNotes[track], 70, 9 } };
+					const Scenario sp = { np, 2, NULL, 0, played, n, NULL, 0, 0.5, 0, NULL, NULL };
+					const Scenario sf = { nf, 2, NULL, 0, folded, n, NULL, 0, 0.5, 0, NULL, NULL };
+					Output *op = render (&sp, 44100, 256), *of = render (&sf, 44100, 256);
+					CHECK (th_peak (op) > 0.001f, "tuning fold: track %d (%s engine) silent", track + 1, engineNames[e]);
+					CHECK (th_identical (op, of),
+					       "tuning fold: track %d, %s engine, note %d is not the kit note with the tuning %+d "
+					       "(first difference at frame %d)",
+					       track + 1, engineNames[e], 60 + k, k, th_first_difference (op, of));
+					release (op);
+					release (of);
+					checked++;
+				}
+			}
+		}
+	}
+	printf ("tuning fold: %d cases (every engine on every track, shifts +3, -5, +12): note 60 + k = tuning + k, "
+		"bit exact\n", checked);
+}
+
 // ---- LXR CC ----
 
 // bass drum hits, CCs and NRPNs between them (never in a hit's engine
@@ -1157,6 +1233,7 @@ int main (int argc, char **argv)
 		checkEngines ();
 		checkInactive ();
 		checkMidiModes ();
+		checkTuningFold ();
 		checkLxrCc ();
 	}
 
