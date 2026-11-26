@@ -130,7 +130,7 @@ class Base(unittest.TestCase):
     def tearDown(self):
         shutil.rmtree(self.tmp)
 
-    def convert(self, mode="multi", **kw):
+    def convert(self, mode="multi-all", **kw):
         report = conv.Report()
         snap, summary = conv.convert([lxr.Project(self.proj.dir)], PORTS, mode=mode, report=report, **kw)
         return snap, report
@@ -316,16 +316,18 @@ class MappingTest(Base):
                         [(s, 41) for s in (0, 6, 7, 13, 14, 20, 21, 27, 28)] + [(31, 38)])
         self.assertEqual(got, expect)
         self.assertEqual(snap["chains"]["1"]["midi_chan"], 9)
-        self.assertEqual(snap["zs3"]["*/0"]["processors"]["1"]["controllers"]["master_midi_mode"], {"value": 0})
+        self.assertEqual(snap["zs3"]["*/0"]["processors"]["1"]["controllers"]["master_midi_mode"], {"value": 1})
         self.assertEqual(sum(report.counts.values()), 2)   # 12 and 7 don't divide 32
 
     def test_kit_mode_step_notes(self):
+        # a constant note: folded into the tuning; varying notes: lost
         p = Pat("NOTES")
-        p.hit(4, 0, note=63)
+        p.hit(4, 0, note=63).hit(1, 0, note=60).hit(1, 4, note=67)
         self.proj.pattern(0, p)
         snap, report = self.convert(mode="kit")
-        self.assertEqual([e[4] for e in notes(events_of(snap, 0, 9)[0])], [49])
-        self.assertEqual(sum(report.counts.values()), 1)
+        self.assertEqual(sorted(e[4] for e in notes(events_of(snap, 0, 9)[0])), [45, 45, 49])
+        self.assertEqual(report.counts, {"step notes (no track chain: the kit's pitch)": 1})
+        self.assertEqual(list(snap["chains"]), ["1", "0"])
 
     def test_zs3s(self):
         for nr, kit in ((0, 1), (3, 0), (5, 1)):
@@ -447,6 +449,198 @@ class MappingTest(Base):
         self.assertTrue(os.path.isfile(os.path.join(out, files[1], "manifest.ttl")))
 
 
+# ---- the hybrid layout ----
+
+def port(symbol):
+    return conv.prepare_ports(PORTS)["by_symbol"][symbol]
+
+
+def limited(symbol, value):
+    p = port(symbol)
+    return min(p["max"], max(p["min"], value))
+
+
+class HybridTest(Base):
+    def hybrid(self, **kw):
+        return self.convert(mode="hybrid", **kw)
+
+    def ctl(self, snap, zs3, symbol):
+        return snap["zs3"][zs3]["processors"]["1"]["controllers"][symbol]["value"]
+
+    def test_fold(self):
+        # constant notes 63 (BD), 60 (SD), 58 (CY): all in the kit column,
+        # GM notes, the tunings folded in the pattern's ZS3; a lock of the
+        # bass drum's coarse tune (CC 9 = parameter 8) folded too, its
+        # restore the folded kit value
+        p = Pat("FOLD", kit=1)      # kit 1: slot 3 (T2) runs the snare engine
+        p.hit(0, 0, note=63, locks=[(9, 40)]).hit(0, 8, note=63).hit(3, 4).hit(4, 2, note=58).hit(2, 6, note=61)
+        self.proj.pattern(0, p)
+        snap, report = self.hybrid()
+        self.assertEqual(list(snap["chains"]), ["1", "0"])
+        self.assertEqual(snap["chains"]["1"]["midi_chan"], 9)
+        kit, seq = events_of(snap, 0, 9)
+        self.assertEqual((seq["tracks"][0]["chan"], seq["name"], seq["repeat"]), (9, "Kit", 255))
+        self.assertEqual(sorted((e[0], e[4]) for e in notes(kit)), [(0, 36), (2, 49), (4, 38), (6, 41), (8, 36)])
+        for col in range(9):
+            self.assertEqual(events_of(snap, 0, col)[1]["repeat"], 0)
+        base = conv.kit_controls(PORTS, lxr.Project(self.proj.dir).kit(1))
+        z = "*/0"
+        self.assertEqual(self.ctl(snap, z, "master_midi_mode"), 1)
+        for sym, k in (("bd_osc_coarse", 3), ("bd_fm_freq", 3), ("cy_osc_coarse", -2), ("cy_modosc_freq1", -2),
+                       ("cy_modosc_freq2", -2), ("t2_osc_coarse", 1), ("sd_osc_coarse", 0), ("t1_osc_coarse", 0)):
+            self.assertEqual(self.ctl(snap, z, sym), limited(sym, base[sym] + k), sym)
+        # the snare engine (T2 in kit 1): only the coarse tune moves
+        self.assertEqual(self.ctl(snap, z, "t2_noise_freq"), base["t2_noise_freq"])
+        self.assertEqual(self.ctl(snap, "zs3-0", "bd_osc_coarse"), base["bd_osc_coarse"] + 3)
+        cc = [(e[0], e[4], e[6]) for e in controls(kit)]
+        coarse = base["bd_osc_coarse"] + port("bd_osc_coarse")["offset"]     # the engine value
+        self.assertEqual(cc, [(0, 9, 43), (8, 9, coarse + 3)])
+        self.assertEqual(report.counts, {})
+
+    def test_fold_per_pattern(self):
+        # one kit, two patterns with other constant notes: each ZS3 its fold
+        self.proj.pattern(0, Pat("A", kit=0).hit(0, 0, note=63))
+        self.proj.pattern(1, Pat("B", kit=0).hit(0, 0, note=55).hit(0, 4, note=55))
+        self.proj.pattern(2, Pat("C", kit=0).hit(0, 0))
+        snap, _ = self.hybrid()
+        base = conv.kit_controls(PORTS, lxr.Project(self.proj.dir).kit(0))["bd_osc_coarse"]
+        self.assertEqual([self.ctl(snap, z, "bd_osc_coarse") for z in ("*/0", "*/1", "*/2")],
+                         [base + 3, base - 5, base])
+        self.assertEqual(list(snap["chains"]), ["1", "0"])
+
+    def test_fold_limited(self):
+        # a coarse tune at the top of the range: the fold is limited (the
+        # oscillator limits the note alike: exact), not counted
+        params = kit_params(0)
+        params[port("bd_osc_coarse")["param"]] = 127
+        self.proj.kit(2, "HIGH", params)
+        self.proj.pattern(0, Pat("HI", kit=2).hit(0, 0, note=63))
+        snap, report = self.hybrid()
+        self.assertEqual(self.ctl(snap, "*/0", "bd_osc_coarse"), port("bd_osc_coarse")["max"])
+        self.assertEqual(report.counts, {})
+        self.assertEqual(list(snap["chains"]), ["1", "0"])
+
+    def test_melodic_track(self):
+        # track 2's notes vary: its own chain (MIDI, no processors, thru to
+        # chain 1) and column; the kit column leaves it out
+        a = Pat("MEL", kit=0).hit(0, 0).hit(1, 0, note=60).hit(1, 4, note=67, locks=[(51, 5)]).hit(1, 8, note=55)
+        self.proj.pattern(0, a)
+        self.proj.pattern(1, Pat("NOT2", kit=1).hit(0, 0, note=62))     # track 2 silent here
+        snap, report = self.hybrid()
+        self.assertEqual(list(snap["chains"]), ["1", "3", "0"])
+        chain = snap["chains"]["3"]
+        self.assertEqual(chain, {"title": "LXR T2", "midi_chan": 1, "midi_thru": True, "audio_thru": False,
+                                 "zmop_index": 2, "cc_route": snap["chains"]["1"]["cc_route"], "slots": [],
+                                 "zctrls": []})
+        self.assertIn(51, chain["cc_route"])
+        kit, _ = events_of(snap, 0, 9)
+        self.assertEqual([e[4] for e in notes(kit)], [36])
+        t2, seq = events_of(snap, 0, 1)
+        self.assertEqual((seq["tracks"][0]["chan"], seq["repeat"], seq["name"]), (1, 255, "T2 Tom1"))
+        self.assertEqual([(e[0], e[4]) for e in notes(t2)], [(0, 60), (4, 67), (8, 55)])
+        self.assertEqual([(e[0], e[4]) for e in controls(t2)], [(4, 51), (8, 51)])
+        # the other row: column 2 silent (replaces the previous row's), kit
+        # column folded
+        self.assertEqual(events_of(snap, 1, 1)[0], None)
+        self.assertEqual(events_of(snap, 1, 1)[1]["repeat"], 255)
+        for ph in snap["zynseq"]["scenes"][0]["phrases"]:
+            self.assertEqual(len(ph["sequences"]), 32)
+            self.assertEqual([i for i, q in enumerate(ph["sequences"]) if q["repeat"]], [1, 9])
+        # ZS3s: zs3-0 with the track chain's routing, the others chain 1 only
+        z0 = snap["zs3"]["zs3-0"]["chains"]
+        self.assertEqual(z0["3"], {"midi_chan": 1, "midi_in": ["ZynMidiRouter:ch2_out"], "midi_out": [1],
+                                   "audio_in": [], "audio_out": [0]})
+        self.assertEqual(z0["1"]["midi_chan"], 9)
+        for z in ("*/0", "*/1"):
+            self.assertEqual(list(snap["zs3"][z]["chains"]), ["1"])
+        self.assertEqual(report.counts, {})
+
+    def test_polyrhythm(self):
+        # lengths that don't divide the pattern: own chains, native lengths
+        # (repeated to whole beats); a length that divides it: the kit column
+        p = Pat("POLY", kit=0)
+        p.lengths = [16, 12, 7, 8, 16, 16, 16]
+        p.hit(0, 0).hit(1, 0).hit(1, 11).hit(2, 0).hit(2, 3).hit(3, 2)
+        self.proj.pattern(0, p)
+        snap, report = self.hybrid()
+        self.assertEqual(list(snap["chains"]), ["1", "3", "4", "0"])
+        t2, _ = events_of(snap, 0, 1)
+        self.assertEqual((t2["beats"], t2["steps"], [e[0] for e in notes(t2)]), (3, 12, [0, 11]))
+        t3, _ = events_of(snap, 0, 2)
+        self.assertEqual((t3["beats"], t3["steps"]), (7, 28))
+        self.assertEqual([e[0] for e in notes(t3)], [0, 3, 7, 10, 14, 17, 21, 24])
+        kit, _ = events_of(snap, 0, 9)
+        self.assertEqual(sorted((e[0], e[4]) for e in notes(kit)), [(0, 36), (2, 38), (10, 38)])
+        self.assertEqual(report.counts, {})
+
+    def test_hihat_slot(self):
+        # tracks 6 and 7 share slot 6: track 6's note folds, track 7 with
+        # another constant note gets a chain, its notes less the fold
+        self.proj.pattern(0, Pat("HH", kit=0).hit(5, 0, note=63).hit(6, 4, note=65).hit(6, 8, note=65))
+        snap, report = self.hybrid()
+        self.assertEqual(list(snap["chains"]), ["1", "8", "0"])
+        self.assertEqual(snap["chains"]["8"]["midi_chan"], 6)
+        ho, _ = events_of(snap, 0, 6)
+        self.assertEqual([e[4] for e in notes(ho)], [62, 62])
+        self.assertEqual([e[4] for e in notes(events_of(snap, 0, 9)[0])], [42])
+        base = conv.kit_controls(PORTS, lxr.Project(self.proj.dir).kit(0))["hh_osc_coarse"]
+        self.assertEqual(self.ctl(snap, "*/0", "hh_osc_coarse"), limited("hh_osc_coarse", base + 3))
+        # the same notes: both in the kit column
+        self.proj.pattern(0, Pat("HH", kit=0).hit(5, 0, note=63).hit(6, 4, note=63))
+        snap, report = self.hybrid()
+        self.assertEqual(list(snap["chains"]), ["1", "0"])
+
+    def test_track_chains_all_none(self):
+        p = Pat("X", kit=0)
+        p.lengths[2] = 7
+        p.hit(0, 0, note=63).hit(1, 0, note=60).hit(1, 4, note=62).hit(2, 0)
+        self.proj.pattern(0, p)
+        snap, report = self.hybrid(track_chains="all")
+        self.assertEqual(list(snap["chains"]), ["1"] + [str(t + 2) for t in range(7)] + ["0"])
+        self.assertEqual([snap["chains"][str(t + 2)]["midi_chan"] for t in range(7)], list(range(7)))
+        self.assertEqual(len(snap["zs3"]["zs3-0"]["chains"]), 8)
+        self.assertEqual([e[4] for e in notes(events_of(snap, 0, 0)[0])], [63])     # no fold: the note
+        self.assertEqual(notes(events_of(snap, 0, 9)[0]), [])
+        self.assertEqual(self.ctl(snap, "*/0", "bd_osc_coarse"),
+                         conv.kit_controls(PORTS, lxr.Project(self.proj.dir).kit(0))["bd_osc_coarse"])
+        self.assertEqual([i for i, q in enumerate(snap["zynseq"]["scenes"][0]["phrases"][0]["sequences"])
+                          if q["repeat"]], list(range(7)) + [9])
+        snap, report = self.hybrid(track_chains="none")
+        self.assertEqual(list(snap["chains"]), ["1", "0"])
+        self.assertEqual(report.counts, {"step notes (no track chain: the kit's pitch)": 1,
+                                         "track lengths that don't divide the pattern (no track chain: the track "
+                                         "restarts with the pattern)": 1})
+        snap2, _ = self.convert(mode="kit")
+        self.assertEqual(snap2, snap)
+
+    def test_songs(self):
+        # a song-only pattern counts for the track chains too
+        self.proj.pattern(0, Pat("A", kit=0).hit(0, 0))
+        self.proj.pattern(1, Pat("B", kit=0).hit(4, 0, note=50).hit(4, 2, note=52))
+        self.proj.song(0, "S", [0, 1], end=lxr.SONG_LOOP)
+        snap, _ = self.hybrid(patterns=[0])
+        self.assertEqual(list(snap["chains"]), ["1", "6", "0"])
+        phrases = snap["zynseq"]["scenes"][0]["phrases"]
+        self.assertEqual([ph["name"] for ph in phrases], ["00 A", "S 1: 00 A", "S 2: 01 B"])
+        self.assertEqual(events_of(snap, 1, 4)[1]["repeat"], 1)      # silent in the song row
+        cy, seq = events_of(snap, 2, 4)
+        self.assertEqual(([e[4] for e in notes(cy)], seq["repeat"]), ([50, 52], 1))
+
+    def test_cli_default(self):
+        self.proj.pattern(0, Pat("A", kit=1).hit(1, 0, note=61).hit(1, 4, note=62))
+        out = os.path.join(self.tmp, "out")
+        with open(os.devnull, "w") as null:
+            old, sys.stdout = sys.stdout, null
+            try:
+                rc = conv.main([self.proj.dir, "--out", out])
+            finally:
+                sys.stdout = old
+        self.assertEqual(rc, 0)
+        with open(os.path.join(out, "000-TESTPROJ.zss")) as f:
+            snap = json.load(f)
+        self.assertEqual((snap["chains"]["1"]["midi_chan"], list(snap["chains"])), (9, ["1", "3", "0"]))
+
+
 # ---- zynthian_state_schema.py ----
 
 def load_schema():
@@ -466,11 +660,11 @@ class SchemaTest(Base):
         schema = load_schema()
         if schema is None:
             self.skipTest("no zynthian-ui checkout (ZYNTHIAN_UI=%s)" % ZYNTHIAN_UI)
-        self.proj.pattern(0, Pat("A", kit=0).hit(0, 0, locks=[(200, 3)]).hit(0, 4))
-        self.proj.pattern(1, Pat("B", kit=1).hit(1, 0))
+        self.proj.pattern(0, Pat("A", kit=0).hit(0, 0, locks=[(200, 3)]).hit(0, 4).hit(2, 0, note=62).hit(2, 4, note=65))
+        self.proj.pattern(1, Pat("B", kit=1).hit(1, 0, note=63))
         self.proj.song(0, "S", [0, 1], end=lxr.SONG_LOOP)
-        for mode in ("multi", "kit"):
-            snap, _ = self.convert(mode=mode, pc_events="songs")
+        for mode, tc in (("multi-all", "needed"), ("kit", "needed"), ("hybrid", "needed"), ("hybrid", "all")):
+            snap, _ = self.convert(mode=mode, pc_events="songs", track_chains=tc)
             snap = json.loads(json.dumps(snap))         # as written
 
             def sub(keys, ref, what):
@@ -599,9 +793,9 @@ class LibZynseqTest(Base):
         self.proj.pattern(1, Pat("B", kit=1).hit(4, 0).hit(5, 2).hit(6, 4))
         self.proj.song(0, "S", [0, 1, 1], end=lxr.SONG_LOOP)
         self.proj.song(1, "E", [1, 0])
-        for mode in ("multi", "kit"):
+        for mode, tc in (("multi-all", "needed"), ("kit", "needed"), ("hybrid", "needed"), ("hybrid", "all")):
             for pc in (None, "songs"):
-                snap, _ = self.convert(mode=mode, pc_events=pc)
+                snap, _ = self.convert(mode=mode, pc_events=pc, track_chains=tc)
                 ours = json.loads(json.dumps(snap["zynseq"]))
                 got = self.roundtrip(lib, ours)
                 self.compare(ours, got)

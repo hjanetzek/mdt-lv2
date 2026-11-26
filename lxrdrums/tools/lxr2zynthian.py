@@ -2,7 +2,8 @@
 """LXR-02 / OpenElixir-02 projects as Zynthian snapshots with eDrumSynth.
 
   lxr2zynthian.py PROJDIR [PROJDIR...] [--patterns N...] [--songs N...]
-                  [--mode multi|kit] [--name NAME] [--prog NNN] [--one]
+                  [--mode hybrid|multi-all|kit] [--track-chains needed|all|none]
+                  [--name NAME] [--prog NNN] [--one]
                   [--out DIR] [--presets] [--pc-events songs|all]
                   [--install HOST [--bank BANK]] [--ports PORTS_JSON] [-v]
 
@@ -11,7 +12,8 @@ GLO.CFG, PRJ.NFO) becomes a snapshot NNN-Name.zss (schema 6) in --out
 (default: here); --one puts all projects given into one snapshot. Load it
 on Zynthian and play the patterns from the launcher:
 
-- one eDrumSynth chain (chain 1, with its mixer strip) and the main mixbus;
+- one eDrumSynth chain (chain 1, with its mixer strip), the track chains
+  (below) and the main mixbus;
 - zynseq: one launcher row (phrase) per pattern ("NN NAME"), then each song
   as a chain of rows (follow actions: the next row, at the end back to the
   song's first row if it loops, else stop), sharing the patterns' zynseq
@@ -23,12 +25,26 @@ on Zynthian and play the patterns from the launcher:
   is the first pattern's. Patterns only in songs follow (their first song
   row selected).
 
-Layouts (--mode): multi (default): eDrumSynth's MIDI Mode Multi, the chain
-on all MIDI channels, LXR track n in launcher column n-1 (MIDI channel n),
-one zynseq pattern per track with the step notes and the track's own length
-(multiples of 4 steps; others unrolled to the pattern's bars); kit: MIDI
-Mode Kit, the chain on channel 10, one zynseq pattern per LXR pattern in
-column 10 with General MIDI drum notes (step notes and track lengths lost).
+Layouts (--mode):
+- hybrid (default): eDrumSynth's MIDI Mode Multi, its chain on MIDI channel
+  10; launcher column 10 (the kit) holds the tracks that play at one pitch
+  over the pattern as General MIDI drum notes, a constant step note other
+  than 60 folded into the kit's tuning of that pattern's ZS3 (the voice's
+  coarse tune and the oscillators the note moves: bit exact, render test).
+  Track chains (--track-chains): needed (default): a MIDI chain "LXR Tn"
+  (no processors, MIDI thru to chain 1, MIDI channel n) for each track whose
+  step notes vary or whose length doesn't divide the pattern's (a
+  polyrhythm) in any converted pattern, and for track 7 (the open hi-hat)
+  whose constant note differs from track 6's (one slot, one tuning); its
+  column n holds the track's
+  patterns with the step notes and the track's own length (repeated to
+  whole beats), and the kit column leaves it out; all: seven track chains;
+  none: no track chains (step notes and polyrhythms lost, counted).
+  Zynthian's pad view shows a column per chain (by its MIDI channel).
+- kit: hybrid with --track-chains none.
+- multi-all: the chain on all MIDI channels, every track in its column n
+  (step notes; lengths in multiples of 4 steps native, others unrolled):
+  plays right, but the pad view has no column for a chain on all channels.
 
 Steps: velocity, probability (event chance), flams (stutter), shift
 (event offset), shuffle (the pattern's swing), parameter locks as CC / NRPN
@@ -76,8 +92,12 @@ COLUMNS = 32                # sequences per phrase (0-15: MIDI channels)
 KIT_CHANNEL = 9             # MIDI channel 10
 PC_CHANNEL = 15             # MIDI channel 16: the program change column
 ALL_CHANNELS = 0xFFFF       # a chain on every MIDI channel
-GM_NOTES = (36, 45, 41, 38, 49, 42, 46)     # track 1-7 in Kit mode (src/notemap.h)
-TRACK_NAMES = ("BD", "T1", "T2", "SD", "CY", "HC", "HO")
+GM_NOTES = (36, 45, 41, 38, 49, 42, 46)     # track 1-7 on the kit channel (src/notemap.h)
+SLOT_OF_TRACK = (0, 1, 2, 3, 4, 5, 5)       # track 7 (open hi-hat): slot 6's second trigger
+TUNED = ("_osc_coarse", "_fm_freq", "_modosc_freq1", "_modosc_freq2")  # the oscillators a note moves
+LAYOUTS = ("hybrid", "multi-all", "kit")
+TRACK_CHAINS = ("needed", "all", "none")
+TRACK_NAMES = ("T1 BD", "T2 Tom1", "T3 Tom2", "T4 SD", "T5 CY", "T6 HC", "T7 HO")  # columns (pads: 7 chars)
 CC_NOTE, CC_CONTROL, CC_PROGRAM = 144, 176, 192
 CC_DATA, CC_NRPN_FINE, CC_NRPN_COARSE = 6, 98, 99
 END_RESTORE_OFFSET = 0.875  # the restore at the pattern's last step: late in it
@@ -194,21 +214,18 @@ def lock_param(number):
     return number - 1 if number <= 127 else number
 
 
-def add_track(lane, pattern, track, steps, kit_params, mode, report, where):
+def add_track(lane, pattern, track, steps, kit_params, report, where, note_of, fold=None):
     """track's steps of pattern into lane (steps long: the track looped or
-    unrolled); kit_params: the kit's parameter values (restores)"""
+    unrolled); kit_params: the kit's parameter values (restores); note_of:
+    step index -> the note to play; fold: {parameter: semitones} the
+    pattern's tuning fold (added to locks of those parameters)"""
+    fold = fold or {}
     length = pattern.lengths[track]
     src = [pattern.tracks[track][i % length] for i in range(steps)]
     triggers = [i for i in range(steps) if src[i].active]
     for i in triggers:
         s = src[i]
-        # the note: Multi plays the step note on the track's channel, Kit the GM note
-        if mode == "multi":
-            note = s.note
-        else:
-            note = GM_NOTES[track]
-            if s.note != lxr.DEFAULT_NOTE:
-                report.note("step notes (Kit mode: the voices' tuned pitch)", "%s step %d: note %d" % (where, i + 1, s.note))
+        note = note_of(i, s)
         step, offset = i, 0.0
         if s.shift > 0:
             offset = s.shift / 8.0
@@ -230,8 +247,12 @@ def add_track(lane, pattern, track, steps, kit_params, mode, report, where):
                 if i < length:
                     report.note("locks on CC 0 (bank select: no parameter)", "%s step %d" % (where, i + 1))
                 continue
-            lane.control(i, number, value, LOCK)
             param = lock_param(number)
+            if param in fold:
+                # a lock of a folded tuning: folded too (limited as the
+                # oscillator limits the note: exact)
+                value = min(127, max(0, value + fold[param]))
+            lane.control(i, number, value, LOCK)
             if param >= len(kit_params):
                 report.note("locks of parameters outside kits (not restored)", "%s step %d: %d" % (where, i + 1, number))
                 continue
@@ -257,8 +278,35 @@ def zynseq_pattern(steps, events, swing=0.0):
             "events": events}
 
 
-def kit_controls(m, kit, mode):
-    """every eDrumSynth control for a kit (None: the init kit): port symbol -> value"""
+def kit_engines(m, kit):
+    """the engine of each slot (indices into m["engines"])"""
+    if kit is not None:
+        return list(kit.engines)
+    return [m["engines"].index(s["stock_engine"]) for s in m["slots"]]
+
+
+def fold_symbols(m, kit, slot):
+    """the ports a trigger's note moves on slot (osc_setBaseNote()): the
+    coarse tune, the drum engine's FM freq, the cymbal's and hi-hat's mod
+    osc freqs (the snare engine: the coarse tune only)"""
+    engine = m["engines"][kit_engines(m, kit)[slot]]
+    ports = m["by_symbol"]
+    syms = [m["slots"][slot]["prefix"] + t for t in TUNED]
+    return [s for s in syms if s in ports and engine in ports[s]["engines"]]
+
+
+def fold_params(m, kit, fold):
+    """{engine parameter: semitones} of a fold {slot: semitones}"""
+    out = {}
+    for slot, k in (fold or {}).items():
+        for s in fold_symbols(m, kit, slot):
+            out[m["by_symbol"][s]["param"]] = k
+    return out
+
+
+def kit_controls(m, kit, mode="multi", fold=None):
+    """every eDrumSynth control for a kit (None: the init kit): port symbol
+    -> value; fold: {slot: semitones} added to the slot's tuning"""
     values = {}
     if kit is not None:
         values = snd2lv2.kit_values(m, kit.params, kit.engines, lambda text: None)
@@ -274,13 +322,25 @@ def kit_controls(m, kit, mode):
         else:
             v = p["default"]
         controls[s] = float(v) if p["kind"] == "float" else int(v)
+    ports = m.get("by_symbol") or {p["symbol"]: p for p in m["ports"]}
+    for slot, k in (fold or {}).items():
+        for s in fold_symbols(m, kit, slot):
+            controls[s] = min(ports[s]["max"], max(ports[s]["min"], controls[s] + k))
     return controls
 
 
-def kit_param_values(m, kit):
+def kit_param_values(m, kit, fold=None):
     """the engine's value of every kit parameter with the kit loaded (the
     restore values): the ports' values where a port has the parameter (out
-    of range values: the init kit's, as the engine), else the kit's"""
+    of range values: the init kit's, as the engine), else the kit's; fold:
+    {slot: semitones} added to the slot's tuning"""
+    params = engine_params(m, kit)
+    for param, k in fold_params(m, kit, fold).items():
+        params[param] = min(127, max(0, params[param] + k))
+    return params
+
+
+def engine_params(m, kit):
     if kit is None:
         params = [0] * m["kit_size"]
         for p in m["ports"]:
@@ -311,15 +371,27 @@ class Converted:
         self.steps = pattern.bars() * lxr.BAR
         self.title = "%02d %s" % (nr, pattern.name) if pattern.name else "%02d" % nr
         self.kit = None
+        self.fold = {}          # {slot: semitones}: constant step notes folded into the tuning
         self.zs3 = None         # its ZS3 id
         self.program = None     # its program change (None: none)
         self.phrase = None      # its launcher row
 
 
+def track_notes(pattern, t):
+    """the step notes of track t's played steps (within its length)"""
+    return [s.note for s in pattern.tracks[t][:pattern.lengths[t]] if s.active]
+
+
+def chain_steps(length):
+    """a track chain's zynseq pattern: the track repeated to whole beats"""
+    return length * STEPS_PER_BEAT // math.gcd(length, STEPS_PER_BEAT)
+
+
 class Builder:
-    def __init__(self, m, mode, report):
+    def __init__(self, m, mode, report, track_chains="needed"):
         self.m = m
-        self.mode = mode
+        self.mode = "multi-all" if mode == "multi-all" else "hybrid"
+        self.track_chains = "none" if mode == "kit" else track_chains
         self.report = report
         self.patns = {}
         self.next_id = 1
@@ -327,6 +399,8 @@ class Builder:
         self.patterns = []      # Converted, in order
         self.zs3_order = []     # Converted with a ZS3, in order
         self.phrases = []
+        self.chained = set()    # tracks (0-6) with a track chain
+        self.reasons = {}       # track -> {reason: [where, ...]}
 
     def add_patn(self, steps, events, swing=0.0):
         pid = self.next_id
@@ -343,6 +417,68 @@ class Builder:
             swing = 1.0
         return round(swing, 4)
 
+    # ---- the hybrid layout: which tracks get a chain, the tuning folds ----
+
+    def pattern_fold(self, pattern, kit):
+        """the tuning fold of a pattern in the kit column: ({slot:
+        semitones}, [(track, why)] tracks the fold can't serve). A slot's
+        fold is the step note - 60 of its first kit-column track with one
+        note (slot 6: track 6, else 7); another such track on the slot with
+        another note can't be served. The folded values are limited to the
+        ports' ranges: still exact, the oscillator limits the note to 0..127
+        alike (osc_setBaseNote()), and an LFO or velocity on the tuning
+        multiplies the frequency (modNodeValue) after that"""
+        fold, conflicts = {}, []
+        for slot in range(len(self.m["slots"])):
+            k = None
+            for t in (t for t in range(lxr.TRACKS) if SLOT_OF_TRACK[t] == slot and t not in self.chained):
+                notes = set(track_notes(pattern, t))
+                if len(notes) != 1:
+                    continue
+                note = notes.pop() - lxr.DEFAULT_NOTE
+                if k is None:
+                    k = note
+                elif note != k:
+                    conflicts.append((t, "another constant step note than track 6 (they share the hi-hat slot)"))
+            if k:
+                fold[slot] = k
+        return fold, conflicts
+
+    def chain_track(self, t, why, where):
+        self.chained.add(t)
+        self.reasons.setdefault(t, {}).setdefault(why, []).append(where)
+
+    def plan(self, items):
+        """the track chains for the patterns to convert (items: (where,
+        pattern, kit)); needed: every track whose step notes vary or whose
+        length doesn't divide its pattern, then the tracks a tuning fold
+        can't serve (until nothing changes)"""
+        if self.mode != "hybrid" or self.track_chains == "none":
+            return
+        if self.track_chains == "all":
+            for t in range(lxr.TRACKS):
+                self.chain_track(t, "--track-chains all", None)
+            return
+        for where, pattern, kit in items:
+            steps = pattern.bars() * lxr.BAR
+            for t in range(lxr.TRACKS):
+                notes = track_notes(pattern, t)
+                if not notes:
+                    continue
+                if len(set(notes)) > 1:
+                    self.chain_track(t, "step notes vary", where)
+                if steps % pattern.lengths[t]:
+                    self.chain_track(t, "a polyrhythm (its length doesn't divide the pattern's)",
+                                     "%s (%d in %d steps)" % (where, pattern.lengths[t], steps))
+        changed = True
+        while changed:
+            changed = False
+            for where, pattern, kit in items:
+                for t, why in self.pattern_fold(pattern, kit)[1]:
+                    if t not in self.chained:
+                        self.chain_track(t, why, where)
+                        changed = True
+
     def convert_pattern(self, project, nr):
         pattern = project.pattern(nr)
         c = Converted(project, nr, pattern)
@@ -350,14 +486,14 @@ class Builder:
         where = "%s pattern %02d" % (project.name, nr)
         if c.kit is None:
             self.report.note("patterns whose kit is missing (the init kit used)", "%s: kit %d" % (where, pattern.kit))
-        kit_params = kit_param_values(self.m, c.kit)
         swing = self.swing(pattern, where)
         for t in range(lxr.TRACKS):
             for i, s in enumerate(pattern.tracks[t][:pattern.lengths[t]]):
                 if not s.active and any(s.locks):
                     self.report.note("parameter locks on steps that don't play (the LXR ignores them too)",
                                      "%s track %d step %d" % (where, t + 1, i + 1))
-        if self.mode == "multi":
+        if self.mode == "multi-all":
+            kit_params = kit_param_values(self.m, c.kit)
             for t in range(lxr.TRACKS):
                 length = pattern.lengths[t]
                 if not any(s.active for s in pattern.tracks[t][:length]):
@@ -370,30 +506,68 @@ class Builder:
                         self.report.note("track lengths that aren't multiples of 4 steps (unrolled to the pattern's bars: "
                                          "the track restarts with the pattern)", "%s track %d: %d" % (where, t + 1, length))
                 lane = Lane(steps, self.report, "%s track %d" % (where, t + 1))
-                add_track(lane, pattern, t, steps, kit_params, self.mode, self.report, lane.where)
+                add_track(lane, pattern, t, steps, kit_params, self.report, lane.where, lambda i, s: s.note)
                 self.used_ccs |= lane.used_ccs
                 c.columns[t] = (self.add_patn(steps, lane.events(), swing), steps)
-        else:
-            lane = Lane(c.steps, self.report, where)
-            for t in range(lxr.TRACKS):
-                length = pattern.lengths[t]
-                if not any(s.active for s in pattern.tracks[t][:length]):
-                    continue
-                if c.steps % length:
-                    self.report.note("track lengths that don't divide the pattern (Kit mode: the track restarts with the "
-                                     "pattern)", "%s track %d: %d" % (where, t + 1, length))
-                add_track(lane, pattern, t, c.steps, kit_params, self.mode, self.report, "%s track %d" % (where, t + 1))
-            self.used_ccs |= lane.used_ccs
-            c.columns[KIT_CHANNEL] = (self.add_patn(c.steps, lane.events(), swing), c.steps)
+            self.patterns.append(c)
+            return c
+
+        # hybrid: the kit column (channel 10) and the track chains' columns
+        c.fold = self.pattern_fold(pattern, c.kit)[0]
+        fold = fold_params(self.m, c.kit, c.fold)
+        kit_params = kit_param_values(self.m, c.kit, c.fold)
+        lane = Lane(c.steps, self.report, where)
+        for t in range(lxr.TRACKS):
+            length = pattern.lengths[t]
+            if t in self.chained or not track_notes(pattern, t):
+                continue
+            tw = "%s track %d" % (where, t + 1)
+            if c.steps % length:
+                self.report.note("track lengths that don't divide the pattern (no track chain: the track restarts with "
+                                 "the pattern)", "%s: %d" % (tw, length))
+            k = c.fold.get(SLOT_OF_TRACK[t], 0)
+
+            def gm(i, s, t=t, k=k, tw=tw):
+                if s.note - lxr.DEFAULT_NOTE != k:
+                    self.report.note("step notes (no track chain: the kit's pitch)",
+                                     "%s step %d: note %d" % (tw, i + 1, s.note))
+                return GM_NOTES[t]
+            add_track(lane, pattern, t, c.steps, kit_params, self.report, tw, gm, fold)
+        self.used_ccs |= lane.used_ccs
+        c.columns[KIT_CHANNEL] = (self.add_patn(c.steps, lane.events(), swing), c.steps)
+        for t in sorted(self.chained):
+            length = pattern.lengths[t]
+            if not track_notes(pattern, t):
+                continue
+            steps = chain_steps(length)
+            k = c.fold.get(SLOT_OF_TRACK[t], 0)     # a fold of the slot's other track (the hi-hat's)
+            tw = "%s track %d" % (where, t + 1)
+
+            def chromatic(i, s, k=k, tw=tw):
+                note = s.note - k
+                if not 0 <= note <= 127:
+                    self.report.note("step notes out of range after the hi-hat slot's fold (limited)",
+                                     "%s step %d" % (tw, i + 1))
+                    note = min(127, max(0, note))
+                return note
+            tl = Lane(steps, self.report, tw)
+            add_track(tl, pattern, t, steps, kit_params, self.report, tw, chromatic, fold)
+            self.used_ccs |= tl.used_ccs
+            c.columns[t] = (self.add_patn(steps, tl.events(), swing), steps)
         self.patterns.append(c)
         return c
+
+    def used_columns(self):
+        if self.mode == "multi-all":
+            return list(range(lxr.TRACKS))
+        return sorted(self.chained) + [KIT_CHANNEL]
 
     def phrase(self, name, c, song_steps=None, follow=(FOLLOW_NONE, 0), pc=None, tempo=0.0):
         """a launcher row playing c's zynseq patterns; song_steps: in a song
         (the children play once through the row), else they loop; pc:
         (step, program) a program change event in column 16"""
         sequences = []
-        used = range(lxr.TRACKS) if self.mode == "multi" else (KIT_CHANNEL,)
+        used = self.used_columns()
         for col in range(COLUMNS):
             seq = {"mode": 1, "group": col, "name": "", "repeat": 0, "followAction": FOLLOW_NONE, "followParam": 0,
                    "tracks": [{"chan": col if col < 16 else 0, "output": 0, "map": 0, "patns": {}}]}
@@ -406,7 +580,7 @@ class Builder:
                 # column played in the row before
                 seq["repeat"] = LOOP if song_steps is None else 1
             if col in used:
-                seq["name"] = TRACK_NAMES[col] if self.mode == "multi" else "Kit"
+                seq["name"] = "Kit" if col == KIT_CHANNEL else TRACK_NAMES[col]
             if col == PC_CHANNEL and pc is not None:
                 step, program = pc
                 pid = self.add_patn(c.steps, [event(step, CC_PROGRAM, program, 0)])
@@ -427,12 +601,24 @@ def safe_name(name):
     return name or "LXR"
 
 
-def convert(projects, m, mode="multi", patterns=None, songs=None, name=None, pc_events=None, report=None):
+def prepare_ports(m):
+    """the port map with an index by symbol"""
+    if "by_symbol" not in m:
+        m["by_symbol"] = {p["symbol"]: p for p in m["ports"]}
+    return m
+
+
+def convert(projects, m, mode="hybrid", patterns=None, songs=None, name=None, pc_events=None, report=None,
+            track_chains="needed"):
     """the snapshot (a dict) of projects (lxrformat.Project); patterns /
     songs: the numbers to convert (None: all non-empty ones; with several
-    projects, of each); returns (snapshot, summary)"""
+    projects, of each); mode: hybrid, multi-all or kit (= hybrid without
+    track chains); track_chains (hybrid): needed, all or none; returns
+    (snapshot, summary)"""
+    if mode not in LAYOUTS or track_chains not in TRACK_CHAINS:
+        raise ValueError("mode %r, track chains %r" % (mode, track_chains))
     report = report or Report()
-    b = Builder(m, mode, report)
+    b = Builder(prepare_ports(m), mode, report, track_chains)
     several = len(projects) > 1
     bpms = {p.bpm for p in projects}
     tempo = projects[0].bpm
@@ -443,19 +629,33 @@ def convert(projects, m, mode="multi", patterns=None, songs=None, name=None, pc_
     def prefix(project):
         return "%s " % project.name if several else ""
 
-    # the patterns' launcher rows, in project and pattern order
-    converted = {}
+    # the patterns to convert (the launcher rows', then the songs'), for
+    # the track chains they need
+    launch_keys = []
     for p in projects:
         nrs = p.pattern_numbers() if patterns is None else [n for n in patterns if p.files["PAT"].get(n)]
         for n in nrs:
             if p.pattern(n).is_empty():
                 report.note("empty patterns asked for (left out)", "%s pattern %02d" % (p.name, n))
                 continue
-            converted[(id(p), n)] = b.convert_pattern(p, n)
+            launch_keys.append((p, n))
         if patterns is not None:
             for n in patterns:
                 if n not in p.files["PAT"]:
                     report.note("patterns asked for that the project hasn't", "%s pattern %02d" % (p.name, n))
+    keys = list(launch_keys)
+    for p in projects:
+        for sn in (p.song_numbers() if songs is None else songs):
+            song = p.song(sn)
+            for n in (song.patterns if song else ()):
+                if p.pattern(n) is not None and not p.pattern(n).is_empty() and (p, n) not in keys:
+                    keys.append((p, n))
+    b.plan([("%s pattern %02d" % (p.name, n), p.pattern(n), p.kit(p.pattern(n).kit)) for p, n in keys])
+
+    # the patterns' launcher rows, in project and pattern order
+    converted = {}
+    for p, n in launch_keys:
+        converted[(id(p), n)] = b.convert_pattern(p, n)
     launch = list(b.patterns)
     if not launch:
         raise lxr.FormatError("no patterns to convert")
@@ -506,10 +706,21 @@ def convert(projects, m, mode="multi", patterns=None, songs=None, name=None, pc_
                 b.phrase("%s%s %d: %s" % (prefix(p), sname, k + 1, c.title), c, steps, follow, pc,
                          phrase_tempo(p))
 
-    snapshot = build_snapshot(b, b.zs3_order, mode, tempo, name or (projects[0].name if not several else "LXR"))
-    summary = ("%d pattern%s, %d song%s (%d launcher rows), %d kits, %d zynseq patterns, %d BPM, %s mode"
+    snapshot = build_snapshot(b, b.zs3_order, tempo, name or (projects[0].name if not several else "LXR"))
+    layout = b.mode if b.mode == "multi-all" else "hybrid layout, track chains %s" % b.track_chains
+    summary = ("%d pattern%s, %d song%s (%d launcher rows), %d kits, %d zynseq patterns, %d BPM, %s"
                % (len(launch), "" if len(launch) == 1 else "s", nsongs, "" if nsongs == 1 else "s", len(b.phrases),
-                  len({id(c.kit) for c in launch}), len(b.patns), tempo, mode))
+                  len({id(c.kit) for c in launch}), len(b.patns), tempo, layout))
+    if b.mode == "hybrid":
+        folded = sum(1 for c in b.patterns if c.fold)
+        summary += "\n  tuning folds: %d of %d patterns" % (folded, len(b.patterns))
+        summary += "\n  track chains: %s" % (", ".join("T%d" % (t + 1) for t in sorted(b.chained)) or "none")
+        for t in sorted(b.chained):
+            for why, where in b.reasons.get(t, {}).items():
+                shown = [w for w in where if w]
+                summary += "\n    T%d: %s%s" % (t + 1, why, (" (%d pattern%s: %s)" % (
+                    len(shown), "" if len(shown) == 1 else "s", ", ".join(shown[:4]) + (", ..." if len(shown) > 4 else ""))
+                    if shown else ""))
     return snapshot, summary
 
 
@@ -525,41 +736,60 @@ def assign_zs3(b, c):
     return c
 
 
-def zs3_entry(m, c, mode, title, extra=None):
-    midi_chan = ALL_CHANNELS if mode == "multi" else KIT_CHANNEL
+def track_chain_id(t):
+    """the chain id of track t's chain (T1 = 2 .. T7 = 8)"""
+    return CHAIN + 1 + t
+
+
+def zs3_entry(b, c, title, extra=None, track_chains=False):
+    """c's ZS3: chain 1 (its kit controllers, folded); track_chains (zs3-0):
+    also the track chains' routing (MIDI thru to chain 1)"""
+    midi_chan = ALL_CHANNELS if b.mode == "multi-all" else KIT_CHANNEL
+    chains = {str(CHAIN): {"midi_chan": midi_chan, "midi_in": ["ZynMidiRouter:ch0_out"], "audio_in": [],
+                           "audio_out": [MAIN_OUT]}}
+    if track_chains:
+        for t in sorted(b.chained):
+            chains[str(track_chain_id(t))] = {"midi_chan": t, "midi_in": ["ZynMidiRouter:ch%d_out" % (t + 1)],
+                                              "midi_out": [CHAIN], "audio_in": [], "audio_out": [MAIN_OUT]}
     entry = {
         "title": title,
         "active_chain": CHAIN,
         "active_phrase": c.phrase,
-        "chains": {str(CHAIN): {"midi_chan": midi_chan, "midi_in": ["ZynMidiRouter:ch0_out"], "audio_in": [],
-                                "audio_out": [MAIN_OUT]}},
+        "chains": chains,
         "processors": {str(PROC): {"bank_info": None, "bank_subdir_info": None, "preset_info": None,
                                    "preset_subdir_info": None, "controllers": {
-                                       s: {"value": v} for s, v in kit_controls(m, c.kit, mode).items()}}},
+                                       s: {"value": v} for s, v in kit_controls(b.m, c.kit, "multi", c.fold).items()}}},
     }
     if extra:
         entry["processors"].update(extra)
     return entry
 
 
-def build_snapshot(b, launch, mode, tempo, name):
-    m = b.m
-    midi_chan = ALL_CHANNELS if mode == "multi" else KIT_CHANNEL
+def build_snapshot(b, launch, tempo, name):
+    midi_chan = ALL_CHANNELS if b.mode == "multi-all" else KIT_CHANNEL
     cc_route = sorted(b.used_ccs | {CC_DATA, CC_NRPN_FINE, CC_NRPN_COARSE})
     chains = {
         str(CHAIN): {"title": "LXR %s" % name, "midi_chan": midi_chan, "midi_thru": False, "audio_thru": False,
                      "zmop_index": 0, "cc_route": cc_route,
                      "slots": [{str(PROC): ENGINE}, {str(MIXER_PROC): "MI"}], "zctrls": []},
-        "0": {"title": "Main", "midi_chan": None, "midi_thru": False, "audio_thru": True, "zmop_index": None,
-              "cc_route": [], "slots": [{"-1": "MR"}], "zctrls": []},
     }
+    # the track chains: MIDI chains without processors (an empty MIDI chain
+    # with midi_thru forwards its MIDI router output to the chains in its
+    # midi_out: zynthian_chain.py _rebuild_midi_routes()), on channel n
+    # (zynseq's column n), to eDrumSynth's input (Multi: channel n = track n)
+    for t in sorted(b.chained):
+        chains[str(track_chain_id(t))] = {"title": "LXR T%d" % (t + 1),
+                                          "midi_chan": t, "midi_thru": True, "audio_thru": False,
+                                          "zmop_index": t + 1, "cc_route": cc_route, "slots": [], "zctrls": []}
+    chains["0"] = {"title": "Main", "midi_chan": None, "midi_thru": False, "audio_thru": True, "zmop_index": None,
+                   "cc_route": [], "slots": [{"-1": "MR"}], "zctrls": []}
     first = launch[0]
     tempo_proc = {"-4": {"bank_info": None, "bank_subdir_info": None, "preset_info": None, "preset_subdir_info": None,
                          "controllers": {"bpm": {"value": float(tempo)}, "bpb": {"value": BPB}}}}
-    zs3 = {"zs3-0": zs3_entry(m, first, mode, first.title, tempo_proc)}
+    zs3 = {"zs3-0": zs3_entry(b, first, first.title, tempo_proc, track_chains=True)}
     for c in launch:
         title = ("%s %s" % (c.project.name, c.title)) if len({x.project for x in launch}) > 1 else c.title
-        zs3[c.zs3] = zs3_entry(m, c, mode, title)
+        zs3[c.zs3] = zs3_entry(b, c, title)
     zynseq = {"tempo": float(tempo), "bpb": BPB, "scene": 0, "patns": b.patns,
               "scenes": [{"name": "Scene 1", "phrases": b.phrases}]}
     return {"schema_version": 6, "chains": chains, "zs3": zs3, "last_zs3_id": first.zs3,
@@ -595,7 +825,11 @@ def main(argv=None):
     ap.add_argument("projects", nargs="+", metavar="PROJDIR")
     ap.add_argument("--patterns", type=int, nargs="+", metavar="N", help="these patterns (default: all non-empty)")
     ap.add_argument("--songs", type=int, nargs="*", metavar="N", help="these songs (default: all non-empty; none: --songs)")
-    ap.add_argument("--mode", choices=("multi", "kit"), default="multi")
+    ap.add_argument("--mode", choices=LAYOUTS, default="hybrid",
+                    help="hybrid (default): eDrumSynth on channel 10 + track chains; kit: hybrid without track chains; "
+                         "multi-all: eDrumSynth on all channels (no pad view columns)")
+    ap.add_argument("--track-chains", choices=TRACK_CHAINS, default="needed",
+                    help="hybrid: a MIDI chain for the tracks that need one (default), for all seven, or none")
     ap.add_argument("--name", help="the snapshot's name (default: the project's)")
     ap.add_argument("--prog", type=int, default=0, help="the program number NNN of the (first) snapshot")
     ap.add_argument("--one", action="store_true", help="all projects in one snapshot")
@@ -623,7 +857,8 @@ def main(argv=None):
         report = Report(args.verbose)
         name = args.name if args.name and (len(groups) == 1) else None
         try:
-            snapshot, summary = convert(group, m, args.mode, args.patterns, args.songs, name, args.pc_events, report)
+            snapshot, summary = convert(group, m, args.mode, args.patterns, args.songs, name, args.pc_events, report,
+                                        args.track_chains)
         except (lxr.FormatError, OSError) as e:
             print("%s: %s" % (", ".join(p.folder for p in group), e), file=sys.stderr)
             continue

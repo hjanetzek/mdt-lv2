@@ -665,7 +665,16 @@ static void checkMidiModes (void)
 static void checkTuningFold (void)
 {
 	static const char *const prefixes[EDS_SLOTS] = { "bd", "t1", "t2", "sd", "cy", "hh" };
-	static const int shifts[] = { 3, -5, 12 };
+	// shifts, and the tuned controls' values (port values: engine value -
+	// 60); the last two cases at the ends of the range: the oscillator
+	// limits the note to 0..127 (osc_setBaseNote()), so a fold limited to
+	// the port range is still exact
+	static const struct
+	{
+		int k;
+		float base[4];
+	} shifts[] = { { 3, { 5, 2, -3, 4 } }, { -5, { 5, 2, -3, 4 } }, { 12, { 5, 2, -3, 4 } },
+		       { 3, { 66, 67, 65, -10 } }, { -4, { -58, -60, 3, -59 } } };
 	int checked = 0;
 	for (int slot = 0; slot < EDS_SLOTS; slot++)
 	{
@@ -675,11 +684,11 @@ static void checkTuningFold (void)
 			{
 				for (int s = 0; s < NELEM (shifts); s++)
 				{
-					const int k = shifts[s];
+					const int k = shifts[s].k;
+					const float *const base = shifts[s].base;
 					// the tuned controls (port values: engine value - 60) and
 					// whether the note moves them
 					char sym[4][32];
-					const float base[4] = { 5, 2, -3, 4 };
 					const int moved[4] = { 1, e == 0, e >= 2, e >= 2 };
 					snprintf (sym[0], sizeof sym[0], "%s_osc_coarse", prefixes[slot]);
 					snprintf (sym[1], sizeof sym[1], "%s_fm_freq", prefixes[slot]);
@@ -703,7 +712,8 @@ static void checkTuningFold (void)
 					for (int i = 0; i < 4; i++, n++)
 					{
 						played[n] = (Control) { sym[i], base[i] };
-						folded[n] = (Control) { sym[i], base[i] + (moved[i] ? (float) k : 0.f) };
+						const float f = base[i] + (moved[i] ? (float) k : 0.f);
+						folded[n] = (Control) { sym[i], f > 67 ? 67 : f < -60 ? -60 : f };
 					}
 					const Note np[] = { { 0, (uint8_t) (60 + k), 127, (uint8_t) track },
 							    { 9000, (uint8_t) (60 + k), 70, (uint8_t) track } };
@@ -723,8 +733,8 @@ static void checkTuningFold (void)
 			}
 		}
 	}
-	printf ("tuning fold: %d cases (every engine on every track, shifts +3, -5, +12): note 60 + k = tuning + k, "
-		"bit exact\n", checked);
+	printf ("tuning fold: %d cases (every engine on every track, shifts +3, -5, +12, and at the range's ends): "
+		"note 60 + k = tuning + k (limited to the range), bit exact\n", checked);
 }
 
 // ---- LXR CC ----
