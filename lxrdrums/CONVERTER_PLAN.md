@@ -361,3 +361,52 @@ tracks not dividing the pattern 66, the same locks. The `--one` snapshots
 of all 78 patterns (1.3 MB Multi) round-trip through libzynseq in both
 modes.
 
+
+## 9. Pad view: the hybrid layout with track chains (planned 2026-11-26)
+
+**Finding (phone test):** the snapshots load and the ZS3s play, but
+Zynthian's pad view showed no patterns. It draws one column per chain and
+reads that chain's sequence by the chain's MIDI channel
+(`zyngui/zynthian_launcher_data.py` `pad_sequence_state()`); a chain on all
+channels (`midi_chan` 0xffff, the Multi layout) has no column. The zynseq
+data itself is right (launcher phrases with step-sequencer patterns).
+
+**Facts** (`zynautoconnect/zynthian_autoconnect.py` ~900-990): a MIDI chain
+with `midi_thru` forwards its **last MIDI processor's** output (an empty
+MIDI chain forwards nothing) to the **first processor of each chain in its
+`midi_out`, directly to the plugin's port**, bypassing the target chain's
+zmop channel filter. A chain's own zmop filters (and doesn't translate) its
+channel. Zynthian's native MIDI tools (`MC`, `SX`) don't pass notes through;
+x42's midifilter (with "MIDI Thru") isn't packaged in nura.
+
+**Layout "hybrid" (new default):**
+- Chain 1: eDrumSynth + MI on **channel 10**, MIDI Mode Multi, LXR CC on;
+  its column holds every track that plays at a constant pitch over the
+  pattern's length (GM notes). zynseq's direct output on channels 1-7 is
+  filtered by this chain's zmop, so nothing plays twice.
+- A track constant note other than 60 (the factory projects' 63) is folded
+  into the kit's tuning (the voice's oscillator coarse tune; verify by a
+  render test that coarse is in semitones and both give the same pitch), so
+  such tracks stay in the kit column.
+- **Track chains, only where needed:** a MIDI chain "LXR Tn" on channel
+  n-1 (n = 1..7) for a track whose step notes vary, or whose length doesn't
+  match the pattern's (polyrhythm, played natively instead of unrolled):
+  slots `[{"id": "JV/mThru"}]`, `midi_thru: true`, `midi_out: [1]`; its
+  column holds that track's patterns as chromatic notes; eDrumSynth (Multi)
+  plays channel n-1 as track n.
+- `--track-chains needed|all|none` (default needed; `all` = seven track
+  chains for every track, a config with all options; `none` = the Kit
+  layout without step notes).
+- ZS3s: zs3-0 lists every chain (track chains with `midi_out`); the
+  per-pattern ZS3s list only chain 1 (kit controllers), so the track
+  chains' routing isn't touched.
+
+**mThru** (new, name open): an LV2 MIDI pass-through (`lv2:MIDIPlugin`,
+atom MIDI in → atom MIDI out, events copied as they are), built and
+installed with eDrumSynth (bundle `mthru.lv2`), Zynthian engine key
+`JV/mThru` (a nura `engine_config` default: MIDI Tool, enabled). One jalv
+per track chain (about 1 % of a Cortex-A7 core each on the phone).
+
+**To verify on the phone:** pads in every column, no doubled notes,
+melodic tracks at pitch, polyrhythmic tracks drifting as on the LXR, ZS3
+browsing still switching kits.
