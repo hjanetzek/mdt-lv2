@@ -371,13 +371,14 @@ reads that chain's sequence by the chain's MIDI channel
 channels (`midi_chan` 0xffff, the Multi layout) has no column. The zynseq
 data itself is right (launcher phrases with step-sequencer patterns).
 
-**Facts** (`zynautoconnect/zynthian_autoconnect.py` ~900-990): a MIDI chain
-with `midi_thru` forwards its **last MIDI processor's** output (an empty
-MIDI chain forwards nothing) to the **first processor of each chain in its
-`midi_out`, directly to the plugin's port**, bypassing the target chain's
-zmop channel filter. A chain's own zmop filters (and doesn't translate) its
-channel. Zynthian's native MIDI tools (`MC`, `SX`) don't pass notes through;
-x42's midifilter (with "MIDI Thru") isn't packaged in nura.
+**Facts**: a MIDI chain with `midi_thru` forwards to the **first processor
+of each chain in its `midi_out`, directly to the plugin's port**, bypassing
+the target chain's zmop channel filter (`zynautoconnect/zynthian_autoconnect.py`
+~900-930). **An empty MIDI chain forwards its MIDI router output**
+(`zyngine/zynthian_chain.py` `_rebuild_midi_routes()`: `elif
+len(self.midi_slots) == 0 and self.midi_thru: sources = self.midi_in`;
+corrected 2026-11-26, the user pointed it out). A chain's own zmop filters
+(and doesn't translate) its channel.
 
 **Layout "hybrid" (new default):**
 - Chain 1: eDrumSynth + MI on **channel 10**, MIDI Mode Multi, LXR CC on;
@@ -391,7 +392,7 @@ x42's midifilter (with "MIDI Thru") isn't packaged in nura.
 - **Track chains, only where needed:** a MIDI chain "LXR Tn" on channel
   n-1 (n = 1..7) for a track whose step notes vary, or whose length doesn't
   match the pattern's (polyrhythm, played natively instead of unrolled):
-  slots `[{"id": "JV/mThru"}]`, `midi_thru: true`, `midi_out: [1]`; its
+  a pure MIDI chain (no processors), `midi_thru: true`, `midi_out: [1]`; its
   column holds that track's patterns as chromatic notes; eDrumSynth (Multi)
   plays channel n-1 as track n.
 - `--track-chains needed|all|none` (default needed; `all` = seven track
@@ -401,11 +402,8 @@ x42's midifilter (with "MIDI Thru") isn't packaged in nura.
   per-pattern ZS3s list only chain 1 (kit controllers), so the track
   chains' routing isn't touched.
 
-**mThru** (new, name open): an LV2 MIDI pass-through (`lv2:MIDIPlugin`,
-atom MIDI in → atom MIDI out, events copied as they are), built and
-installed with eDrumSynth (bundle `mthru.lv2`), Zynthian engine key
-`JV/mThru` (a nura `engine_config` default: MIDI Tool, enabled). One jalv
-per track chain (about 1 % of a Cortex-A7 core each on the phone).
+No pass-through plugin is needed (an earlier draft planned one, "mThru");
+track chains cost no extra jalv process.
 
 **To verify on the phone:** pads in every column, no doubled notes,
 melodic tracks at pitch, polyrhythmic tracks drifting as on the LXR, ZS3
