@@ -11,7 +11,9 @@ snapshot.
 Status: implemented, desktop-tested (2026-11-26): eDrumSynth 0.2.0 (the
 LXR CC switch, §4.3), `tools/lxrformat.py`, `tools/lxr2zynthian.py`,
 `tests/converter_test.py`; the implementation notes, deviations and the
-factory projects' counts: §8. Next: the phone (§5's last item, with the
+factory projects' counts: §8. The hybrid layout for Zynthian's pad view
+(new default, desktop-tested 2026-11-26): §9 and its implementation notes
+§9.1. Next: the phone (§5's last item, §9's checks, with the
 device-testing session). Plan of 2026-11-25; depends on eDrumSynth v2
 (`PLAN.md` §13).
 
@@ -408,3 +410,98 @@ track chains cost no extra jalv process.
 **To verify on the phone:** pads in every column, no doubled notes,
 melodic tracks at pitch, polyrhythmic tracks drifting as on the LXR, ZS3
 browsing still switching kits.
+
+### 9.1 Implementation notes (2026-11-26)
+
+Where the implementation settles or differs from §9:
+
+- **Options**: `--mode hybrid` (default) | `multi-all` (§8's Multi layout,
+  kept: it plays right, the pad view just has no column for it) | `kit`
+  (= hybrid with `--track-chains none`: §8's Kit layout replaced; MIDI
+  Mode Multi on channel 10 is the same kit, and the tuning folds keep the
+  constant notes' pitch, which Kit mode lost). `--track-chains needed`
+  (default) | `all` | `none` for hybrid.
+- **Track chains are pure MIDI chains** (no processors; the mThru plugin of
+  the first draft dropped): an empty chain with `midi_thru` forwards its
+  zmop's output to the chains in its `midi_out` (`zynthian_chain.py`
+  `_rebuild_midi_routes()`: `elif len(self.midi_slots) == 0 and
+  self.midi_thru: sources = self.midi_in`, then `for output in
+  self.midi_out: self.midi_routes[output] = sources`), and autoconnect
+  maps a chain id destination to that chain's first synth processor's jack
+  port (`zynthian_autoconnect.py` "Chain MIDI routing"), bypassing chain
+  1's channel filter. Snapshot chain entry as `get_state()` writes a chain
+  without processors: `{"title": "LXR Tn", "midi_chan": n-1, "midi_thru":
+  true, "audio_thru": false, "zmop_index": n, "cc_route": [...], "slots":
+  [], "zctrls": []}`, chain id n+1 (T1 = 2 .. T7 = 8), zmop n (chain 1
+  keeps 0); listed after chain 1, before chain 0 (the pad view's order).
+  `midi_out` isn't chain state in Zynthian, only ZS3 state, so zs3-0 has
+  each track chain with `midi_chan`, `midi_in` (`ZynMidiRouter:ch<zmop>_out`),
+  `midi_out: [1]`, `audio_in: []`, `audio_out: [0]` (what `save_zs3()`
+  writes for a MIDI chain); the per-pattern ZS3s list chain 1 only.
+  `cc_route`: the same list as chain 1's on every track chain (a track's
+  locks play in its column, through its chain; a chain without a synth
+  never calls `set_zmop_options()`, so its zmop's CC drop flag is whatever
+  it was: the route makes the locked CCs pass either way).
+- **Which tracks need a chain** (`needed`, over every converted pattern,
+  the launcher rows' and the song-only ones): step notes that vary within
+  the track's length; a length that doesn't divide the pattern's steps (a
+  length that divides it plays the same tiled into the kit column, so it
+  isn't a polyrhythm); track 7 when its constant note differs from track
+  6's in a pattern (one slot, one tuning: track 6's note folds, track 7's
+  chain plays its notes less that fold). Once chained, all of the track's
+  patterns are in its column (chromatic notes, no fold of its own); the
+  converter prints each chain's reasons and patterns.
+- **Track chain patterns**: the track's own length repeated to whole beats
+  (zynseq patterns are whole beats: lcm(length, 4) steps, 7 -> 28, 12 ->
+  12), looping (`repeat` 255) against the row as the LXR's tracks run
+  against the pattern; in songs `ceil(row / length)` plays as in §8.
+- **Tuning folds** (verified: render test `tuning fold`, 140 cases, bit
+  exact): the trigger's note moves not only the coarse tune but every
+  oscillator `osc_setBaseNote()` gets: the drum engine's FM oscillator
+  (FM Freq, role 5), the cymbal's and hi-hat's two mod oscillators (Mod
+  Osc Freq 1 / 2, roles 5 and 2); the snare engine only its main
+  oscillator (its noise freq stays). Coarse is in semitones (`note =
+  coarse + baseNote - 60`, `MidiNoteFrequencies[]`). So note 60 + k equals
+  those ports + k with note 60, for every engine on every track (open
+  hi-hat included), k = +3, -5, +12. Values that would leave the range
+  (factory kits have coarse 127 often) are limited to it: still exact,
+  the oscillator limits the note to 0..127 alike, and an LFO / velocity on
+  the tuning multiplies the frequency (`modNodeValue`) afterwards, so it
+  doesn't interact (also tested at both ends). Per pattern: the fold is in
+  that pattern's ZS3 (a kit shared by patterns with different constant
+  notes gets each pattern's), the restores use the folded kit values, and
+  a lock of a folded parameter (CC / NRPN of coarse or FM / mod freq) is
+  folded too.
+- **Columns**: the kit column (9, "Kit") and each track chain's column
+  (n-1, "Tn Voice", e.g. "T2 Tom1": the pad shows 7 characters) are
+  present in every row with a non-zero repeat (empty: the library's
+  default pattern), as §8, so swapping rows replaces every column; with
+  `all` the kit column is still there (empty).
+- **Real projects** (cynthian's `tmp/lxr`, the 7 of §8, `needed`): track
+  chains and why (a track can have both reasons):
+
+  | Project | Track chains | Melodic (step notes vary) | Polyrhythm | Folded patterns |
+  |---|---|---|---|---|
+  | PROJ01 Easy Yo | 4: T3 T4 T5 T6 | T3 T4 T5 | T6 (12/16, 7/32) | 8 of 8 |
+  | PROJ02 P0$T IDM | 5: T1 T2 T3 T5 T6 | T1 T2 T3 T5 | T3 (14/16), T5 (3/16), T6 (7/16) | 8 of 9 |
+  | PROJ03 SpainDub | 2: T2 T4 | T2 T4 | - | 4 of 4 |
+  | PROJ04 Hrtlevel | 5: T1 T2 T3 T5 T6 | T2 T3 | T1 T2 T3 T5 T6 | 16 of 16 |
+  | PROJ05 Beatsies | 6: T1-T6 | T1 T2 T3 T4 T5 | T1 T2 T5 T6 | 9 of 9 |
+  | UNTZKITS | 6: T2-T7 | T5 | T2-T7 (mostly pattern 15) | 16 of 16 |
+  | DLCprjct | 7: all | T1-T6 | T1-T7 | 0 (every track chained) |
+
+  No hi-hat slot conflicts (track 7 only chained for polyrhythms). 35
+  track chains in 7 snapshots; the fold took the 63s of every kit-column
+  track. Snapshots 72-300 KB; all through libzynseq and the schema check
+  (also `--one` with `--pc-events all` in hybrid needed / all, kit,
+  multi-all). `--mode kit` (no chains): 837 steps' notes lost (§8's Kit
+  mode: 5276) and 66 polyrhythmic tracks restarting.
+- **CPU**: a track chain is no process (no jalv); the zmop and a JACK
+  connection per chain.
+- **To check on the phone** (§9's list): the pad view's columns (kit and
+  each track chain), nothing doubled (chain 1 on channel 10 only), the
+  chained tracks at pitch and drifting, ZS3 browsing switching kits and
+  folds while the track chains keep their routing; that a snapshot with
+  pure MIDI chains loads (`slots: []`) and Zynthian's autoconnect really
+  routes them after the zs3-0 restore (`rebuild_graph()` after setting
+  `midi_out`).

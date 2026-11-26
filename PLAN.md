@@ -18,7 +18,12 @@ Status (2026-11-26):
   `tools/lxr2zynthian.py`: LXR projects as Zynthian snapshots (zynseq
   launcher rows and songs, a ZS3 per pattern with its kit; plan and notes
   `lxrdrums/CONVERTER_PLAN.md`); next: armv7 package and phone check (also
-  of the snapshots), recipe bump to 0.2.0.
+  of the snapshots), recipe bump to 0.2.0. After the first phone test the
+  converter's new default is the hybrid layout (eDrumSynth on channel 10
+  with the constant step notes folded into each pattern's tuning, MIDI
+  track chains only for melodic / polyrhythmic tracks, for Zynthian's pad
+  view; `CONVERTER_PLAN.md` §9), desktop-tested 2026-11-26; no plugin
+  change.
 - `va/`: **mTrio** and **mAnalog** (MDT's Trio and Analog synths, §4.1).
   Done: desktop build and tests (bit exact against MDT at 44.1 kHz, engine
   at the host rate, no resampler), presets, draft APKBUILD (`mdt-va-lv2`).

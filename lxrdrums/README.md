@@ -223,7 +223,8 @@ play the project's patterns from the launcher, its kits switched by ZS3s.
 
 ```
 tools/lxr2zynthian.py PROJDIR [PROJDIR...] [--patterns N...] [--songs N...]
-                      [--mode multi|kit] [--name NAME] [--prog NNN] [--one]
+                      [--mode hybrid|multi-all|kit] [--track-chains needed|all|none]
+                      [--name NAME] [--prog NNN] [--one]
                       [--out DIR] [--presets] [--pc-events songs|all]
                       [--install HOST [--bank BANK]] [-v]
 
@@ -236,25 +237,56 @@ scp -r out/eDrumSynth-Easy-Yo.presets.lv2 root@zynthian:/zynthian/zynthian-my-da
 
 What a snapshot (schema 6, `NNN-Name.zss`, NNN = `--prog`) holds:
 
-- chain 1: eDrumSynth with its mixer strip; chain 0 the main mixbus.
-  **Multi** (default): MIDI Mode Multi, the chain on all MIDI channels, LXR
-  track n in launcher column n (MIDI channel n) with the step notes (the
-  pitch) and the track's own length; **Kit** (`--mode kit`): MIDI Mode
-  Kit, the chain on channel 10, one zynseq pattern per LXR pattern in
-  column 10 with General MIDI drum notes (step notes and track lengths are
-  lost; simpler to edit in Zynthian).
+- chain 1: eDrumSynth with its mixer strip, MIDI Mode Multi; chain 0 the
+  main mixbus. Layouts (`--mode`):
+  - **hybrid** (default): chain 1 on MIDI channel 10. Its launcher column
+    (10, "Kit") holds every track that plays at one pitch over the pattern,
+    as General MIDI drum notes. A constant step note other than 60 (the
+    factory projects store 63 on most steps) is folded into that pattern's
+    ZS3: the voice's coarse tune and the oscillators a note moves (the drum
+    engine's FM Freq, the cymbal's and hi-hat's Mod Osc Freq 1 / 2) k
+    semitones up, which sounds exactly like note 60 + k (bit exact in the
+    render test, also where the values reach the end of their range). A kit
+    shared by patterns with different constant notes gets each pattern's
+    fold in that pattern's ZS3.
+    **Track chains** (`--track-chains`, default `needed`): a MIDI chain
+    "LXR Tn" (no processors, MIDI thru to chain 1, on MIDI channel n) for
+    each track whose step notes vary, or whose length doesn't divide its
+    pattern's (a polyrhythm), in any converted pattern, and for track 7 when
+    its constant note differs from track 6's (both play the hi-hat slot).
+    Its column n holds all of that track's patterns with the step notes and
+    the track's own length (repeated to whole beats: 7 steps -> a 28-step
+    pattern), so it runs against the others as on the LXR; the kit column
+    leaves the track out. Zynthian forwards an empty MIDI chain's input to
+    eDrumSynth's MIDI input (Multi: channel n = track n at the note's
+    pitch); chain 1 only listens to channel 10, so nothing plays twice.
+    `all`: seven track chains, every track in its own column; `none`: no
+    track chains (varying step notes play at the kit's pitch and
+    polyrhythmic tracks restart with the pattern, both counted).
+    Zynthian's pad view draws a column per chain (the chain's MIDI channel's
+    sequences).
+  - **kit**: hybrid with `--track-chains none` (simplest to edit in
+    Zynthian; before 0.2.0's hybrid layout: MIDI Mode Kit without the
+    tuning folds).
+  - **multi-all**: the previous default: chain 1 on all MIDI channels,
+    every track in its column n with the step notes, lengths in multiples
+    of 4 steps native, others unrolled. It plays right, but the pad view
+    shows no column for a chain on all channels.
 - zynseq: one launcher row per pattern ("NN NAME"), then the songs as
   rows chained by follow actions (the next row; at the end back to the
   song's first row if it loops, else stop), sharing the patterns' zynseq
   patterns. Tempo from `GLO.CFG`.
 - one ZS3 per pattern in pattern order (program change N = the N-th
-  pattern, `"*/N"`): the pattern's kit as all eDrumSynth controls (no
-  preset, no plugin reload) and its launcher row selected. Step through
-  them with `zs3_next` / `zs3_prev` or program changes to browse the
-  patterns with their kits, then launch the row. zs3-0 = the first
-  pattern.
+  pattern, `"*/N"`): the pattern's kit (with its tuning folds) as all
+  eDrumSynth controls (no preset, no plugin reload) and its launcher row
+  selected; these list only chain 1, so the track chains' routing stays.
+  Step through them with `zs3_next` / `zs3_prev` or program changes to
+  browse the patterns with their kits, then launch the row. zs3-0 = the
+  first pattern, with every chain (the track chains' `midi_out` = chain 1:
+  Zynthian keeps a chain's MIDI outputs in the ZS3s only).
 - eDrumSynth's [LXR CC](#lxr-cc-the-lxrs-cc--nrpn-map) switch on, the
-  chain's `cc_route` = the CCs the locks use and 6, 98, 99.
+  chains' `cc_route` = the CCs the locks use and 6, 98, 99 (a track's locks
+  play in its column, through its track chain).
 
 Steps: velocity, step notes (Multi), probability (zynseq's event chance),
 flams (stutter: 2..8 hits in the step), shift (the event offset in eighths
@@ -264,10 +296,8 @@ step, so shuffle above 95 is limited), parameter locks (CC / NRPN events,
 restored to the kit value when the track's next step plays, as the LXR;
 one the next played step of which is after the loop is restored at the
 pattern's last step, so it is restored when the launcher changes the
-pattern too). Track lengths: Multi keeps multiples of 4 steps as the
-zynseq pattern's length (they run against each other as on the LXR);
-others are unrolled to the pattern's bars (restarting with it), as Kit
-mode does with every track.
+pattern too; a lock of a folded tuning is folded too). Track lengths: see
+the layouts above.
 
 `--pc-events songs` adds a program change event (column 16, MIDI channel
 16) at the last step of a song row whose next row has another kit, so the
@@ -329,7 +359,11 @@ Tests (`ctest`; the validators are skipped when not installed):
   while playing; the inactive engine groups' controls change nothing; Kit
   mode ignores the channel, Multi mode plays channel 10 as the kit and
   channels 1-7 at the note's pitch (an octave up = twice the frequency),
-  as the engine triggered directly; at 48 kHz blocks of 1, 64, 333, 480,
+  as the engine triggered directly; a track's note 60 + k on its channel
+  renders exactly as its kit note with the slot's tuning k semitones up
+  (coarse, FM Freq, Mod Osc Freq 1 / 2 as the engine moves them; every
+  engine on every track, also limited at the range's ends: the converter's
+  tuning folds); at 48 kHz blocks of 1, 64, 333, 480,
   960, 1001 and 4096 frames give the same signal, no NaN or clipping; the
   bass drum's pitch and level at 22.05 to 192 kHz match 44.1 kHz (1 %, 0.5
   dB); a second instance is refused; LXR CC: off, CCs and NRPNs change
@@ -348,7 +382,10 @@ Tests (`ctest`; the validators are skipped when not installed):
   projects written by the test (patterns V1-V3, songs with end and loop,
   kits with and without the engine block, a short kit): the parser, the
   mapping per feature against the expected zynseq events, the ZS3s and
-  songs; the snapshot's keys against zynthian-ui's
+  songs, the hybrid layout (tuning folds per pattern and in locks, a
+  melodic track's and a polyrhythmic track's chains and columns, the
+  hi-hat slot's two tracks, `--track-chains all` / `none`, song-only
+  patterns); the snapshot's keys against zynthian-ui's
   `zynthian_state_schema.py` (`ZYNTHIAN_UI`, default
   `~/bastel/github/zynthian-ui`), and the zynseq JSON through the real
   `libzynseq.so` (`setState`, `getState`, compared; `EDS_LIBZYNSEQ` or
@@ -374,7 +411,9 @@ The tests don't run jalv or anything that creates a JACK client.
   unchanged.
 - The port map has `lxr_cc_port`.
 - `tools/lxr2zynthian.py` and `tools/lxrformat.py`: LXR projects as
-  Zynthian snapshots (tools only: not installed with the plugin).
+  Zynthian snapshots (tools only: not installed with the plugin). Its
+  hybrid layout (eDrumSynth on channel 10 with tuning folds, MIDI track
+  chains where needed) came after the phone test, without a plugin change.
 
 ## Changes in 0.1.0
 
