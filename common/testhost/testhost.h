@@ -61,6 +61,11 @@ const char *th_control_symbol (int index);	// of control 0..count-1
 void th_seq_clear (LV2_Atom_Sequence *seq);
 void th_seq_midi (LV2_Atom_Sequence *seq, uint32_t capacity, int64_t frame, const uint8_t *msg, uint32_t size);
 void th_seq_tempo (LV2_Atom_Sequence *seq, uint32_t capacity, int64_t frame, float bpm);
+// a host transport position (as jalv sends JACK's): time:frame (hostFrame),
+// time:speed (0 stopped, 1 rolling), and when bar >= 0 time:bar, barBeat,
+// beatUnit 4, beatsPerBar 4 and beatsPerMinute bpm
+void th_seq_position (LV2_Atom_Sequence *seq, uint32_t capacity, int64_t frame, int64_t hostFrame, float speed,
+		      int64_t bar, float barBeat, float bpm);
 
 // a stereo render in shared memory: left data[0..frames-1], right
 // data[frames..2*frames-1]

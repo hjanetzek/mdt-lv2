@@ -27,7 +27,7 @@ int th_verbose;
 
 // ---- urid:map ----
 
-#define MAX_URIS 64
+#define MAX_URIS 128
 static char *uris[MAX_URIS];
 static int numUris;
 
@@ -207,6 +207,60 @@ void th_seq_tempo (LV2_Atom_Sequence *seq, uint32_t capacity, int64_t frame, flo
 	seq->atom.size += lv2_atom_pad_size (sizeof obj);
 }
 
+void th_seq_position (LV2_Atom_Sequence *seq, uint32_t capacity, int64_t frame, int64_t hostFrame, float speed,
+		      int64_t bar, float barBeat, float bpm)
+{
+	// properties: key, then a Long, Float or Int body (padded to 8 bytes)
+	struct
+	{
+		LV2_Atom_Event ev;
+		LV2_Atom_Object_Body body;
+		struct
+		{
+			LV2_Atom_Property_Body prop;
+			union
+			{
+				int64_t l;
+				float f;
+				int32_t i;
+			} v;
+		} props[7];
+	} obj;
+	memset (&obj, 0, sizeof obj);
+	int n = 0;
+#define TH_PROP(KEY, TYPE, FIELD, SIZE, VALUE) \
+	do { \
+		obj.props[n].prop.key = th_map (KEY); \
+		obj.props[n].prop.value.type = th_map (TYPE); \
+		obj.props[n].prop.value.size = SIZE; \
+		obj.props[n].v.FIELD = VALUE; \
+		n++; \
+	} while (0)
+	TH_PROP (LV2_TIME__frame, LV2_ATOM__Long, l, 8, hostFrame);
+	TH_PROP (LV2_TIME__speed, LV2_ATOM__Float, f, 4, speed);
+	if (bar >= 0)
+	{
+		TH_PROP (LV2_TIME__barBeat, LV2_ATOM__Float, f, 4, barBeat);
+		TH_PROP (LV2_TIME__bar, LV2_ATOM__Long, l, 8, bar);
+		TH_PROP (LV2_TIME__beatUnit, LV2_ATOM__Int, i, 4, 4);
+		TH_PROP (LV2_TIME__beatsPerBar, LV2_ATOM__Float, f, 4, 4.f);
+		TH_PROP (LV2_TIME__beatsPerMinute, LV2_ATOM__Float, f, 4, bpm);
+	}
+#undef TH_PROP
+	_Static_assert (sizeof obj.props[0] == 24, "property size");
+	const uint32_t size = (uint32_t) (sizeof obj.ev + sizeof obj.body + (size_t) n * sizeof obj.props[0]);
+	if (sizeof (LV2_Atom) + seq->atom.size + size > capacity)
+	{
+		return;
+	}
+	obj.ev.time.frames = frame;
+	obj.ev.body.type = th_map (LV2_ATOM__Object);
+	obj.ev.body.size = size - (uint32_t) sizeof obj.ev;
+	obj.body.otype = th_map (LV2_TIME__Position);
+	memcpy (lv2_atom_sequence_end (&seq->body, seq->atom.size), &obj, size);
+	seq->atom.size += lv2_atom_pad_size (size);
+}
+
 // ---- renders ----
 
 static size_t outputSize (int frames)
@@ -239,6 +293,7 @@ void th_fork (void (*fn) (void *arg, th_output *out), void *arg, th_output *out,
 	if (pid == 0)
 	{
 		fn (arg, out);
+		fflush (stdout);	// the child's output too
 		_exit (0);
 	}
 	int status;
