@@ -147,6 +147,13 @@ extern uint8_t seq_prescaleCounter;
 #define USE_PATTERN_EDIT_BUFFER 0
 
 
+// LV2: the pattern set and the songs are the plugin's project
+// (src/lxr_sequencer.c), swapped as a whole when an LV2 state is restored:
+// the names stand for the current project's, so the declarations here and
+// the definitions in sequencer.c declare and define pointers to them
+#define seq_patternSet (*seq_patternSetPtr)
+#define seq_songData (*seq_songDataPtr)
+
 #if USE_PATTERN_EDIT_BUFFER
 	extern PatternSet seq_patterns;
 #else

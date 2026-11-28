@@ -31,7 +31,7 @@ find_library (MATH_LIBRARY m)
 # generator and the render test host
 set (COMMON ${CMAKE_CURRENT_SOURCE_DIR}/../common)
 set (ENGINE ${CMAKE_CURRENT_SOURCE_DIR}/engine/Synth_LXR)
-set (ENGINE_SRC ${ENGINE}/src/lxr_engine.c)
+set (ENGINE_SRC ${ENGINE}/src/lxr_engine.c ${ENGINE}/src/lxr_sequencer.c)
 set (BUNDLE edrumsynth.lv2)
 set (BUNDLE_DIR ${CMAKE_CURRENT_BINARY_DIR}/${BUNDLE})
 

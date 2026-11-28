@@ -109,7 +109,10 @@ uint8_t lxr_engine_param_kind (uint16_t param);
 uint8_t lxr_engine_param_center (uint16_t param);	// LXR_KIND_SIGNED: the value shown as 0
 
 // starts a voice: velocity 1..127, note LXR_ENGINE_NOTE for the tuned pitch
+// (not while the track is muted: lxr_sequencer.h); the triggers per track
+// since lxr_engine_init() (the sequencer's included)
 void lxr_engine_trigger (uint8_t track, uint8_t velocity, uint8_t note);
+uint32_t lxr_engine_trigger_count (uint8_t track);
 
 // the next LXR_ENGINE_BLOCK frames, added (saturating) to left and right
 void lxr_engine_render (int16_t *left, int16_t *right);

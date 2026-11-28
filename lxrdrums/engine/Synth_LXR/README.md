@@ -26,9 +26,10 @@ GPL-3.0-only with the additional permission and terms of the LXR firmware: [LICE
   - `Soundengine/MIDI/MidiParserCC.c`: `midiParser_ccHandler()` and what it uses, from `MidiParser.c` (the parameter setter; MIDI parsing, routing and MTC are not taken).
   - `Preset/initKit.c`: the init kit. `Preset/KitEngines.c`: the engines of the kit (assignment, the kit file block).
   - `menu/`: the menu headers (`menu.h`, `MenuText.h`, `menuPages.h`, `CcNr2Text.h`) and `Cc2Text.c` (the modulation targets); `MenuData.c`: the parameter names and data types, the voice pages of non-stock engines and the menu item names, from `menu.c` (the display, encoder, load/save and front panel code is not taken).
-- `lxr/shim/`: stand-ins for the firmware parts the sources include: the STM32 HAL (integer types, `__SSAT`, `__QADD16`, `__PKHBT`, ...: instructions on ARMv7E-M, C elsewhere; interrupt masking: none, the object works under `AudioNoInterrupts()`), the sequencer (no patterns: MDT has its own), the output jack switches (all plugged), front panel and UI headers. `lxr_glue.h` declares what `lxr_engine.c` provides; the front panel's messages go to the parameter setter as the LXR's `CortexParser.c` routes them.
+- `lxr/Soundengine/Sequencer/` (eDrumSynth, not in MDT): the LXR's step sequencer (`sequencer.c`, `clockSync.c`, `EuklidGenerator.c`), with `Preset/SeqStep.h` and `Soundengine/DSPAudio/automationNode.c` (the parameter locks); `src/lxr_sequencer.c/.h` builds it on the engine (clock per engine block, the project, a front panel).
+- `lxr/shim/`: stand-ins for the firmware parts the sources include: the STM32 HAL (integer types, `__SSAT`, `__QADD16`, `__PKHBT`, ...: instructions on ARMv7E-M, C elsewhere; interrupt masking: none, the object works under `AudioNoInterrupts()`), the output jack switches (all plugged), front panel, LED, button and UI headers. `lxr_glue.h` declares what `lxr_engine.c` and `lxr_sequencer.c` provide; the front panel's messages go to the parameter setter as the LXR's `CortexParser.c` routes them.
 
-Not taken: the reverb (off in OpenElixir-02), the sequencer, the MIDI parser, presets and the UI.
+Not taken: the reverb (off in OpenElixir-02), the MIDI parser, presets (SD card) and the UI.
 
 ## Source
 

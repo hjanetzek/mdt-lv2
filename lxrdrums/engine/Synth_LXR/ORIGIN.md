@@ -31,9 +31,42 @@ version 1.2, the base of the engine sources), unchanged at first:
 The shim's stand-ins `lxr/shim/Soundengine/Sequencer/sequencer.h` and
 `clockSync.h` are gone; `lxr/shim/lxr_glue.h` includes the real header.
 
+`src/lxr_sequencer.c` (new, `src/lxr_sequencer.h`) compiles the four
+sources as one unit, as `lxr_engine.c` does the engine's, and holds what
+they use from the rest of the firmware (the front panel's selection, the
+menu's and LEDs' state, MIDI out, the UART, the trigger outputs, the
+project's kits: `lxr/shim/lxr_glue.h`, `ledHandler.h`, `buttonHandler.h`),
+the clock (`seq_tick()`'s internal clock per engine block, counted in ticks
+instead of the 4 kHz system tick), locating, the project (patterns, kits,
+songs, globals: the LV2 state's chunk) and the front panel's edits (as the
+LXR's `CortexParser.c`). Not taken: `MidiVoiceControl.c` (its note on is in
+the glue: `slot_trigger()` through `lxr_engine_trigger()`, without MIDI out
+and the front panel's LED pulse), `presetManager.c` (the kits in RAM are the
+project's; no SD card), `seq_tick()` (compiled, not called), the MIDI clock
+(`clockSync.c` compiled, not called: the host's transport instead).
+
 ## Changes in this copy
 
 Changes for the LV2 plugin are marked `LV2:` in the code and listed here, so
 they can be carried back to MicroDexed-touch by hand.
 
-- none yet
+- `lxr/Soundengine/Sequencer/sequencer.h`: `seq_patternSet` and
+  `seq_songData` are macros for `(*seq_patternSetPtr)` and
+  `(*seq_songDataPtr)`: the pattern set and the songs are the project's
+  (`lxr_sequencer.c`), swapped as a whole when the LV2 state is restored. The
+  declarations in the header and the definitions in `sequencer.c` (marked)
+  are unchanged text that now declares and defines the pointers.
+- `sequencer.c` `seq_setPendingPatternActive()`: a pattern switch does not
+  copy the backup buffer back into the pattern left (the LXR discards
+  unsaved edits there; the plugin has no pattern save, the project keeps
+  the edits).
+- `src/lxr_engine.c`: the sequencer is the one of `lxr/` now: no
+  `seq_patternSet` of its own (it was empty), the tempo (`seq_getBpm()`,
+  `lxr_engine_set_tempo()` through `seq_setBpm()`) and the track mutes
+  (`seq_setMute()`, `lxr_engine_trigger()` asks `seq_isTrackMuted()`) are the
+  sequencer's; `lxr_engine_init()` calls `lxr_seq_init()`; new
+  `lxr_engine_trigger_count()`.
+- The probabilities' random numbers: `lxr_sequencer.c` compiles
+  `sequencer.c` with `GetRngValue` defined as its own seeded xorshift32 (a
+  macro around the `#include`, the source unchanged), so the noise
+  oscillators keep theirs and a render repeats.

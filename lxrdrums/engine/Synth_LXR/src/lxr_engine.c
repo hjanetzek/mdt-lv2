@@ -55,6 +55,7 @@
 #include "menu/Cc2Text.c"
 
 #include "lxr_engine.h"
+#include "lxr_sequencer.h"
 #include <stdio.h>
 #include <string.h>
 
@@ -62,11 +63,10 @@
 
 uint8_t activeParameters[NUM_PARAMS];
 uint8_t menu_activePage;
-PatternSet seq_patternSet;
+// LV2: the pattern set is the sequencer's (lxr_sequencer.c)
 GPIO_TypeDef lxr_gpio_plugged = { 0xFFFFFFFF };
 RNG_HandleTypeDef hrng;
 
-static uint8_t mutedTracks;		// bit per track
 static uint32_t triggers[LXR_ENGINE_TRACKS];
 static uint8_t paramName[NUM_PARAMS];	// NamesEnum per parameter (0: none)
 
@@ -80,20 +80,8 @@ uint32_t HAL_RNG_GetRandomNumber (RNG_HandleTypeDef *rng)
 	return state;
 }
 
-static uint16_t tempo = 120;		// lxr_engine_set_tempo()
-
-uint16_t seq_getBpm (void)
-{
-	return tempo;		// the LFO sync
-}
-
-void seq_setMute (uint8_t trackNr, uint8_t isMuted)
-{
-	if (trackNr < LXR_ENGINE_TRACKS)
-	{
-		mutedTracks = isMuted ? mutedTracks | 1 << trackNr : mutedTracks & ~(1 << trackNr);
-	}
-}
+// LV2: the tempo (seq_getBpm(), the LFO sync) and the mutes (seq_setMute())
+// are the sequencer's (lxr_sequencer.c)
 
 void preset_touchTimer (PresetTimer type)
 {
@@ -170,7 +158,6 @@ void lxr_engine_init (void)
 	kitEngines_init ();
 	paramToModTargetInit ();
 
-	mutedTracks = 0;
 	memset (triggers, 0, sizeof triggers);
 
 	// as menu_init() (menu.c): the DJ filter off, the limiter on
@@ -179,6 +166,9 @@ void lxr_engine_init (void)
 	setGlobal (PAR_MIXER_LIMITER, 1);
 
 	lxr_engine_load_init_kit ();
+
+	// LV2: the LXR's sequencer (its mutes, tempo, an empty project)
+	lxr_seq_init ();
 }
 
 // a velocity or LFO modulation target: value is an index into modTargets
@@ -506,10 +496,10 @@ void lxr_engine_decode_engines (const uint8_t *block, uint16_t size, uint8_t *en
 
 void lxr_engine_set_tempo (uint16_t bpm)
 {
-	if (bpm != tempo && bpm > 0)
+	// LV2: the sequencer's tempo (seq_setBpm(): lfo_recalcSync())
+	if (bpm != seq_getBpm () && bpm > 0)
 	{
-		tempo = bpm;
-		lfo_recalcSync ();
+		seq_setBpm (bpm);
 	}
 }
 
@@ -751,7 +741,8 @@ void lxr_engine_param_text (uint16_t param, uint8_t value, char *text, unsigned 
 
 void lxr_engine_trigger (uint8_t track, uint8_t velocity, uint8_t note)
 {
-	if (track >= LXR_ENGINE_TRACKS || (mutedTracks & 1 << track))
+	// LV2: the sequencer's mutes
+	if (track >= LXR_ENGINE_TRACKS || seq_isTrackMuted (track))
 	{
 		return;
 	}
@@ -759,6 +750,11 @@ void lxr_engine_trigger (uint8_t track, uint8_t velocity, uint8_t note)
 
 	// tracks 1..6: slots 1..6, track 7: the 2nd trigger of slot 6 (VoiceSlot.c)
 	slot_trigger (track, velocity, note);
+}
+
+uint32_t lxr_engine_trigger_count (uint8_t track)
+{
+	return track < LXR_ENGINE_TRACKS ? triggers[track] : 0;
 }
 
 void lxr_engine_status (char *text, unsigned size)

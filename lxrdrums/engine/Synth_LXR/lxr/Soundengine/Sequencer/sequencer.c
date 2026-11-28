@@ -141,7 +141,7 @@ float seq_lastShuffle = 0;
 #if USE_PATTERN_EDIT_BUFFER
 	PatternSet seq_patterns;
 #else
-	PatternSet seq_patternSet;
+	PatternSet seq_patternSet;	// LV2: a pointer to the project's (sequencer.h)
 #endif
 
 PatternBackupBuffer patternBackupBuffer;
@@ -149,7 +149,7 @@ PatternBackupBuffer patternBackupBuffer;
 //TempPattern seq_tmpPattern;
 
 //uint8_t seq_newPatternAvailable = 0; 	//indicate that a new pattern has loaded in the background and we should switch
-uint8_t seq_songData[NUM_KIT_SLOTS][MAX_SONG_LENGTH];
+uint8_t seq_songData[NUM_KIT_SLOTS][MAX_SONG_LENGTH];	// LV2: a pointer to the project's (sequencer.h)
 uint8_t *seq_activeSong;
 uint8_t seq_songPositionPointer = 0;	//for song playback, current song position
 //uint8_t seq_bankPreloadPendingFlag = NO_PRELOAD_PENDING;
@@ -634,7 +634,9 @@ IN_ITCM_RAM void seq_setPendingPatternActive()
 		}
 		*/
 		//copy current backup to current slot (discarding unsaved changes)
-		seq_copyBackupBufferToPattern(seq_activePattern);
+		// LV2: not: the plugin has no pattern save, its project (the LV2
+		// state) keeps the edits
+		//seq_copyBackupBufferToPattern(seq_activePattern);
 		//copy pending pattern to backup buffer
 		seq_copyPatternToBackupBuffer(seq_pendingPattern);
 
