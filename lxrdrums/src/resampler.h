@@ -42,5 +42,9 @@ void eds_rs_push (eds_rs *rs, const float *l, const float *r, int n);
 int eds_rs_process (eds_rs *rs, float *l, float *r, int n);
 // latency in input frames (the filter's half length)
 int eds_rs_latency (const eds_rs *rs);
+// output frames from the next output until the next input frame pushed is
+// heard (at the filter's centre): when an engine block not rendered yet
+// sounds
+double eds_rs_pending (const eds_rs *rs);
 
 #endif

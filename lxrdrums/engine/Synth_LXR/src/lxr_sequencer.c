@@ -472,7 +472,7 @@ size_t lxr_seq_chunk_size (const lxr_project *p)
 {
 	return CHUNK_HEADER + (size_t) popcount64 (patternMask (p)) * LXR_SEQ_PATTERN_FILE
 	       + (size_t) popcount64 (p->kitMask) * LXR_SEQ_KIT_FILE + (size_t) popcount64 (songMask (p)) * LXR_SEQ_SONG_FILE
-	       + NUM_GLOBALS + LXR_SEQ_KIT_FILE;
+	       + NUM_GLOBALS + (p == project || p->hasKit ? LXR_SEQ_KIT_FILE : 0);
 }
 
 size_t lxr_seq_chunk_write (const lxr_project *p, uint8_t *buf, size_t size)
@@ -494,7 +494,8 @@ size_t lxr_seq_chunk_write (const lxr_project *p, uint8_t *buf, size_t size)
 	put64 (buf + 24, sm);
 	buf[32] = current ? seq_activePattern : p->pattern;
 	buf[33] = current ? activeSongNr : p->song;
-	buf[34] = (uint8_t) (((current ? seq_songModeEnabled : p->songMode) ? 1 : 0) | 2);
+	const int kit = current || p->hasKit;
+	buf[34] = (uint8_t) (((current ? seq_songModeEnabled : p->songMode) ? 1 : 0) | (kit ? 2 : 0));
 	buf[35] = NUM_GLOBALS;
 	putName (buf + 36, p->name);
 	uint8_t *o = buf + CHUNK_HEADER;
@@ -527,16 +528,17 @@ size_t lxr_seq_chunk_write (const lxr_project *p, uint8_t *buf, size_t size)
 	o += NUM_GLOBALS;
 	if (current)
 	{
-		uint8_t kit[KIT_SIZE], engines[NUM_VOICE_SLOTS];
-		lxr_engine_get_kit (kit, KIT_SIZE);
+		uint8_t params[KIT_SIZE], engines[NUM_VOICE_SLOTS];
+		lxr_engine_get_kit (params, KIT_SIZE);
 		lxr_engine_get_engines (engines);
-		writeKit (o, p->hasKit ? p->kitName : "", kit, engines);
+		writeKit (o, p->kitName, params, engines);
+		o += LXR_SEQ_KIT_FILE;
 	}
-	else
+	else if (kit)
 	{
 		writeKit (o, p->kitName, p->kit, p->engines);
+		o += LXR_SEQ_KIT_FILE;
 	}
-	o += LXR_SEQ_KIT_FILE;
 	return (size_t) (o - buf);
 }
 
@@ -792,7 +794,11 @@ void lxr_seq_locate (double tick)
 	{
 		return;
 	}
-	int64_t s = (int64_t) ceil (tick / TICKS_PER_STEP - 1e-9);
+	// the next step to play: the first one starting in the two blocks before
+	// tick or later (a step due a moment ago plays now, late by less than
+	// that: a start where the host's beat 0 was the frame of its position,
+	// heard after the output already rendered and the resampler's delay)
+	int64_t s = (int64_t) ceil ((tick - 2 * clk.ticksPerBlock + EPSILON) / TICKS_PER_STEP);
 	if (s < 0)
 	{
 		s = 0;
@@ -1272,6 +1278,7 @@ lxr_project *lxr_seq_project_install (lxr_project *p)
 	{
 		preset_loadDrumsetRam (seq_patternSet.kitNr[seq_activePattern], 0, 1);
 	}
+	p->hasKit = 0;	// from now on the engine's (lxr_seq_chunk_write())
 	copySource = 0xFF;
 	if (running)
 	{

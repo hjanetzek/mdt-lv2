@@ -144,6 +144,14 @@ int eds_rs_latency (const eds_rs *rs)
 	return rs->taps / 2;
 }
 
+double eds_rs_pending (const eds_rs *rs)
+{
+	const double step = rs->exact ? rs->stepInt + (double) rs->stepRem / rs->L : rs->stepInt + rs->stepRem / 4294967296.0;
+	const double frac = rs->exact ? (double) rs->frac / rs->L : rs->frac / 4294967296.0;
+	const double k = (rs->fill - (rs->pos + frac) - rs->taps / 2) / step;
+	return k > 0 ? k : 0;
+}
+
 void eds_rs_push (eds_rs *rs, const float *l, const float *r, int n)
 {
 	if (rs->fill + n > rs->cap)

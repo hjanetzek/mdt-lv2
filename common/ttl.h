@@ -45,9 +45,11 @@ static inline void ttl_prefixes (FILE *f, const char *names)
 		{ "midi", "http://lv2plug.in/ns/ext/midi#" },
 		{ "param", "http://lv2plug.in/ns/ext/parameters#" },
 		{ "pg", "http://lv2plug.in/ns/ext/port-groups#" },
+		{ "pprops", "http://lv2plug.in/ns/ext/port-props#" },
 		{ "pset", "http://lv2plug.in/ns/ext/presets#" },
 		{ "rdf", "http://www.w3.org/1999/02/22-rdf-syntax-ns#" },
 		{ "rdfs", "http://www.w3.org/2000/01/rdf-schema#" },
+		{ "state", "http://lv2plug.in/ns/ext/state#" },
 		{ "time", "http://lv2plug.in/ns/ext/time#" },
 		{ "units", "http://lv2plug.in/ns/extensions/units#" },
 		{ "urid", "http://lv2plug.in/ns/ext/urid#" },
@@ -94,6 +96,14 @@ static inline void ttl_group (FILE *f, const char *uri, const char *sym, const c
 {
 	fprintf (f, "<%s#%s>\n\ta pg:InputGroup%s%s ;\n\tlv2:symbol \"%s\" ;\n\tlv2:name ", uri, sym, cls ? " , " : "",
 		 cls ? cls : "", sym);
+	ttl_string (f, name);
+	fprintf (f, " ;\n\tlv2:displayPriority %d .\n\n", priority);
+}
+
+// a group of output control ports (monitors), as ttl_group()
+static inline void ttl_output_control_group (FILE *f, const char *uri, const char *sym, const char *name, int priority)
+{
+	fprintf (f, "<%s#%s>\n\ta pg:OutputGroup ;\n\tlv2:symbol \"%s\" ;\n\tlv2:name ", uri, sym, sym);
 	ttl_string (f, name);
 	fprintf (f, " ;\n\tlv2:displayPriority %d .\n\n", priority);
 }

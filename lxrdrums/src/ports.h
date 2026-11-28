@@ -10,7 +10,9 @@
 #define EDS_PORT_OUT_R		2
 #define EDS_PORT_CONTROL0	3
 #define EDS_NUM_CONTROLS	306
-#define EDS_NUM_PORTS		(EDS_PORT_CONTROL0 + EDS_NUM_CONTROLS)
+#define EDS_PORT_PANEL0		(EDS_PORT_CONTROL0 + EDS_NUM_CONTROLS)	/* the sequencer's panel */
+#define EDS_NUM_PANEL		109
+#define EDS_NUM_PORTS		(EDS_PORT_PANEL0 + EDS_NUM_PANEL)
 
 #define EDS_SLOTS		6
 #define EDS_GLOBAL		EDS_SLOTS	/* the slot of the FX bus and master controls */
@@ -346,5 +348,240 @@ static const eds_control eds_controls[EDS_NUM_CONTROLS] = {
 static const uint16_t eds_engine_controls[EDS_SLOTS] = { 0, 48, 96, 144, 192, 240 };
 #define EDS_MIDI_MODE_CONTROL	304
 #define EDS_LXR_CC_CONTROL	305
+
+/* the sequencer's panel: port EDS_PORT_PANEL0 + i, an input or an output
+   (output); kind: an integer, a toggle, a trigger, an enumeration or
+   a float; min..max, def: the port's range and default */
+enum { EDS_PK_INT, EDS_PK_TOGGLE, EDS_PK_TRIGGER, EDS_PK_ENUM, EDS_PK_FLOAT };
+typedef struct
+{
+	float min, max, def;
+	uint8_t output, kind;
+} eds_panel_port;
+
+enum
+{
+	EDS_P_MODE,			/* 309 seq_mode */
+	EDS_P_PLAY,			/* 310 seq_play */
+	EDS_P_TEMPO,			/* 311 seq_tempo */
+	EDS_P_SHUFFLE,			/* 312 seq_shuffle */
+	EDS_P_PATTERN,			/* 313 seq_pattern */
+	EDS_P_SONG_MODE,			/* 314 seq_song_mode */
+	EDS_P_SONG,			/* 315 seq_song */
+	EDS_P_KIT_AUTOLOAD,		/* 316 seq_kit_autoload */
+	EDS_P_EDIT_PATTERN,		/* 317 seq_edit_pattern */
+	EDS_P_TRACK,			/* 318 seq_track */
+	EDS_P_PAGE,			/* 319 seq_page */
+	EDS_P_STEP,			/* 320 seq_step */
+	EDS_P_STEP_VELOCITY,		/* 321 seq_step_velocity */
+	EDS_P_STEP_NOTE,			/* 322 seq_step_note */
+	EDS_P_STEP_PROB,			/* 323 seq_step_prob */
+	EDS_P_STEP_FLAM,			/* 324 seq_step_flam */
+	EDS_P_STEP_SHIFT,			/* 325 seq_step_shift */
+	EDS_P_LOCK1_TARGET,		/* 326 seq_lock1_target */
+	EDS_P_LOCK1_VALUE,			/* 327 seq_lock1_value */
+	EDS_P_LOCK2_TARGET,		/* 328 seq_lock2_target */
+	EDS_P_LOCK2_VALUE,			/* 329 seq_lock2_value */
+	EDS_P_TRACK_LENGTH,		/* 330 seq_track_length */
+	EDS_P_EUCLID_FILL,			/* 331 seq_euclid_fill */
+	EDS_P_EUCLID_ROTATION,		/* 332 seq_euclid_rotation */
+	EDS_P_EUCLID,			/* 333 seq_euclid */
+	EDS_P_MUTE_BD,			/* 334 seq_mute_bd */
+	EDS_P_MUTE_T1,			/* 335 seq_mute_t1 */
+	EDS_P_MUTE_T2,			/* 336 seq_mute_t2 */
+	EDS_P_MUTE_SD,			/* 337 seq_mute_sd */
+	EDS_P_MUTE_CY,			/* 338 seq_mute_cy */
+	EDS_P_MUTE_HHC,			/* 339 seq_mute_hhc */
+	EDS_P_MUTE_HHO,			/* 340 seq_mute_hho */
+	EDS_P_BUTTON1,			/* 341 seq_button1 */
+	EDS_P_BUTTON2,			/* 342 seq_button2 */
+	EDS_P_BUTTON3,			/* 343 seq_button3 */
+	EDS_P_BUTTON4,			/* 344 seq_button4 */
+	EDS_P_BUTTON5,			/* 345 seq_button5 */
+	EDS_P_BUTTON6,			/* 346 seq_button6 */
+	EDS_P_BUTTON7,			/* 347 seq_button7 */
+	EDS_P_BUTTON8,			/* 348 seq_button8 */
+	EDS_P_BUTTON9,			/* 349 seq_button9 */
+	EDS_P_BUTTON10,			/* 350 seq_button10 */
+	EDS_P_BUTTON11,			/* 351 seq_button11 */
+	EDS_P_BUTTON12,			/* 352 seq_button12 */
+	EDS_P_BUTTON13,			/* 353 seq_button13 */
+	EDS_P_BUTTON14,			/* 354 seq_button14 */
+	EDS_P_BUTTON15,			/* 355 seq_button15 */
+	EDS_P_BUTTON16,			/* 356 seq_button16 */
+	EDS_P_KIT,			/* 357 seq_kit */
+	EDS_P_STORE_KIT,			/* 358 seq_store_kit */
+	EDS_P_CLEAR_TRACK,			/* 359 seq_clear_track */
+	EDS_P_CLEAR_PATTERN,		/* 360 seq_clear_pattern */
+	EDS_P_COPY_PATTERN,		/* 361 seq_copy_pattern */
+	EDS_P_PASTE_PATTERN,		/* 362 seq_paste_pattern */
+	EDS_P_OUT_RUNNING,			/* 363 seq_out_running */
+	EDS_P_OUT_PLAYING,			/* 364 seq_out_playing */
+	EDS_P_OUT_NEXT,			/* 365 seq_out_next */
+	EDS_P_OUT_SONG_POS,		/* 366 seq_out_song_pos */
+	EDS_P_OUT_EDIT_PATTERN,		/* 367 seq_out_edit_pattern */
+	EDS_P_OUT_BPM,			/* 368 seq_out_bpm */
+	EDS_P_OUT_FLASH,			/* 369 seq_out_flash */
+	EDS_P_OUT_MUTES,			/* 370 seq_out_mutes */
+	EDS_P_OUT_PATTERN_LENGTH,		/* 371 seq_out_pattern_length */
+	EDS_P_OUT_TRACK_LENGTH,		/* 372 seq_out_track_length */
+	EDS_P_OUT_SHUFFLE,			/* 373 seq_out_shuffle */
+	EDS_P_OUT_KIT,			/* 374 seq_out_kit */
+	EDS_P_OUT_KIT_PRESENT,		/* 375 seq_out_kit_present */
+	EDS_P_OUT_SELECTED,		/* 376 seq_out_selected */
+	EDS_P_OUT_POS_BD,			/* 377 seq_out_pos_bd */
+	EDS_P_OUT_POS_T1,			/* 378 seq_out_pos_t1 */
+	EDS_P_OUT_POS_T2,			/* 379 seq_out_pos_t2 */
+	EDS_P_OUT_POS_SD,			/* 380 seq_out_pos_sd */
+	EDS_P_OUT_POS_CY,			/* 381 seq_out_pos_cy */
+	EDS_P_OUT_POS_HHC,			/* 382 seq_out_pos_hhc */
+	EDS_P_OUT_POS_HHO,			/* 383 seq_out_pos_hho */
+	EDS_P_OUT_MASK,			/* 384 seq_out_mask */
+	EDS_P_OUT_GRID_BD,			/* 385 seq_out_grid_bd */
+	EDS_P_OUT_GRID_T1,			/* 386 seq_out_grid_t1 */
+	EDS_P_OUT_GRID_T2,			/* 387 seq_out_grid_t2 */
+	EDS_P_OUT_GRID_SD,			/* 388 seq_out_grid_sd */
+	EDS_P_OUT_GRID_CY,			/* 389 seq_out_grid_cy */
+	EDS_P_OUT_GRID_HHC,		/* 390 seq_out_grid_hhc */
+	EDS_P_OUT_GRID_HHO,		/* 391 seq_out_grid_hho */
+	EDS_P_OUT_VEL1,			/* 392 seq_out_vel1 */
+	EDS_P_OUT_VEL2,			/* 393 seq_out_vel2 */
+	EDS_P_OUT_VEL3,			/* 394 seq_out_vel3 */
+	EDS_P_OUT_VEL4,			/* 395 seq_out_vel4 */
+	EDS_P_OUT_VEL5,			/* 396 seq_out_vel5 */
+	EDS_P_OUT_VEL6,			/* 397 seq_out_vel6 */
+	EDS_P_OUT_VEL7,			/* 398 seq_out_vel7 */
+	EDS_P_OUT_VEL8,			/* 399 seq_out_vel8 */
+	EDS_P_OUT_VEL9,			/* 400 seq_out_vel9 */
+	EDS_P_OUT_VEL10,			/* 401 seq_out_vel10 */
+	EDS_P_OUT_VEL11,			/* 402 seq_out_vel11 */
+	EDS_P_OUT_VEL12,			/* 403 seq_out_vel12 */
+	EDS_P_OUT_VEL13,			/* 404 seq_out_vel13 */
+	EDS_P_OUT_VEL14,			/* 405 seq_out_vel14 */
+	EDS_P_OUT_VEL15,			/* 406 seq_out_vel15 */
+	EDS_P_OUT_VEL16,			/* 407 seq_out_vel16 */
+	EDS_P_OUT_STEP_ACTIVE,		/* 408 seq_out_step_active */
+	EDS_P_OUT_STEP_VELOCITY,		/* 409 seq_out_step_velocity */
+	EDS_P_OUT_STEP_NOTE,		/* 410 seq_out_step_note */
+	EDS_P_OUT_STEP_PROB,		/* 411 seq_out_step_prob */
+	EDS_P_OUT_STEP_FLAM,		/* 412 seq_out_step_flam */
+	EDS_P_OUT_STEP_SHIFT,		/* 413 seq_out_step_shift */
+	EDS_P_OUT_LOCK1_TARGET,		/* 414 seq_out_lock1_target */
+	EDS_P_OUT_LOCK1_VALUE,		/* 415 seq_out_lock1_value */
+	EDS_P_OUT_LOCK2_TARGET,		/* 416 seq_out_lock2_target */
+	EDS_P_OUT_LOCK2_VALUE,		/* 417 seq_out_lock2_value */
+};
+
+static const eds_panel_port eds_panel[EDS_NUM_PANEL] = {
+	{    0.0f,     2.0f,    1.0f, 0, 3 },	/* seq_mode */
+	{    0.0f,     1.0f,    0.0f, 0, 1 },	/* seq_play */
+	{   20.0f,   300.0f,  120.0f, 0, 0 },	/* seq_tempo */
+	{    0.0f,   127.0f,    0.0f, 0, 0 },	/* seq_shuffle */
+	{    0.0f,    63.0f,    0.0f, 0, 0 },	/* seq_pattern */
+	{    0.0f,     1.0f,    0.0f, 0, 1 },	/* seq_song_mode */
+	{    0.0f,    63.0f,    0.0f, 0, 0 },	/* seq_song */
+	{    0.0f,     1.0f,    1.0f, 0, 1 },	/* seq_kit_autoload */
+	{    0.0f,    64.0f,   64.0f, 0, 0 },	/* seq_edit_pattern */
+	{    0.0f,     6.0f,    0.0f, 0, 3 },	/* seq_track */
+	{    0.0f,     3.0f,    0.0f, 0, 3 },	/* seq_page */
+	{    0.0f,    15.0f,    0.0f, 0, 0 },	/* seq_step */
+	{    0.0f,   127.0f,  127.0f, 0, 0 },	/* seq_step_velocity */
+	{    0.0f,   127.0f,   60.0f, 0, 0 },	/* seq_step_note */
+	{    0.0f,   100.0f,  100.0f, 0, 0 },	/* seq_step_prob */
+	{    0.0f,     5.0f,    0.0f, 0, 3 },	/* seq_step_flam */
+	{   -7.0f,     7.0f,    0.0f, 0, 0 },	/* seq_step_shift */
+	{    0.0f,   228.0f,    0.0f, 0, 3 },	/* seq_lock1_target */
+	{    0.0f,   127.0f,    0.0f, 0, 0 },	/* seq_lock1_value */
+	{    0.0f,   228.0f,    0.0f, 0, 3 },	/* seq_lock2_target */
+	{    0.0f,   127.0f,    0.0f, 0, 0 },	/* seq_lock2_value */
+	{    1.0f,    64.0f,   16.0f, 0, 0 },	/* seq_track_length */
+	{    1.0f,    64.0f,    4.0f, 0, 0 },	/* seq_euclid_fill */
+	{    0.0f,    63.0f,    0.0f, 0, 0 },	/* seq_euclid_rotation */
+	{    0.0f,     1.0f,    0.0f, 0, 2 },	/* seq_euclid */
+	{    0.0f,     1.0f,    0.0f, 0, 1 },	/* seq_mute_bd */
+	{    0.0f,     1.0f,    0.0f, 0, 1 },	/* seq_mute_t1 */
+	{    0.0f,     1.0f,    0.0f, 0, 1 },	/* seq_mute_t2 */
+	{    0.0f,     1.0f,    0.0f, 0, 1 },	/* seq_mute_sd */
+	{    0.0f,     1.0f,    0.0f, 0, 1 },	/* seq_mute_cy */
+	{    0.0f,     1.0f,    0.0f, 0, 1 },	/* seq_mute_hhc */
+	{    0.0f,     1.0f,    0.0f, 0, 1 },	/* seq_mute_hho */
+	{    0.0f,     1.0f,    0.0f, 0, 2 },	/* seq_button1 */
+	{    0.0f,     1.0f,    0.0f, 0, 2 },	/* seq_button2 */
+	{    0.0f,     1.0f,    0.0f, 0, 2 },	/* seq_button3 */
+	{    0.0f,     1.0f,    0.0f, 0, 2 },	/* seq_button4 */
+	{    0.0f,     1.0f,    0.0f, 0, 2 },	/* seq_button5 */
+	{    0.0f,     1.0f,    0.0f, 0, 2 },	/* seq_button6 */
+	{    0.0f,     1.0f,    0.0f, 0, 2 },	/* seq_button7 */
+	{    0.0f,     1.0f,    0.0f, 0, 2 },	/* seq_button8 */
+	{    0.0f,     1.0f,    0.0f, 0, 2 },	/* seq_button9 */
+	{    0.0f,     1.0f,    0.0f, 0, 2 },	/* seq_button10 */
+	{    0.0f,     1.0f,    0.0f, 0, 2 },	/* seq_button11 */
+	{    0.0f,     1.0f,    0.0f, 0, 2 },	/* seq_button12 */
+	{    0.0f,     1.0f,    0.0f, 0, 2 },	/* seq_button13 */
+	{    0.0f,     1.0f,    0.0f, 0, 2 },	/* seq_button14 */
+	{    0.0f,     1.0f,    0.0f, 0, 2 },	/* seq_button15 */
+	{    0.0f,     1.0f,    0.0f, 0, 2 },	/* seq_button16 */
+	{    0.0f,    64.0f,    0.0f, 0, 0 },	/* seq_kit */
+	{    0.0f,     1.0f,    0.0f, 0, 2 },	/* seq_store_kit */
+	{    0.0f,     1.0f,    0.0f, 0, 2 },	/* seq_clear_track */
+	{    0.0f,     1.0f,    0.0f, 0, 2 },	/* seq_clear_pattern */
+	{    0.0f,     1.0f,    0.0f, 0, 2 },	/* seq_copy_pattern */
+	{    0.0f,     1.0f,    0.0f, 0, 2 },	/* seq_paste_pattern */
+	{    0.0f,     1.0f,    0.0f, 1, 1 },	/* seq_out_running */
+	{    0.0f,    63.0f,    0.0f, 1, 0 },	/* seq_out_playing */
+	{    0.0f,    63.0f,    0.0f, 1, 0 },	/* seq_out_next */
+	{    0.0f,    63.0f,    0.0f, 1, 0 },	/* seq_out_song_pos */
+	{    0.0f,    63.0f,    0.0f, 1, 0 },	/* seq_out_edit_pattern */
+	{    0.0f,  1000.0f,    0.0f, 1, 4 },	/* seq_out_bpm */
+	{    0.0f,   127.0f,    0.0f, 1, 0 },	/* seq_out_flash */
+	{    0.0f,   127.0f,    0.0f, 1, 0 },	/* seq_out_mutes */
+	{    1.0f,    64.0f,   16.0f, 1, 0 },	/* seq_out_pattern_length */
+	{    1.0f,    64.0f,   16.0f, 1, 0 },	/* seq_out_track_length */
+	{    0.0f,   127.0f,    0.0f, 1, 0 },	/* seq_out_shuffle */
+	{    0.0f,    64.0f,   64.0f, 1, 0 },	/* seq_out_kit */
+	{    0.0f,     1.0f,    0.0f, 1, 1 },	/* seq_out_kit_present */
+	{    0.0f,    63.0f,    0.0f, 1, 0 },	/* seq_out_selected */
+	{   -1.0f,    63.0f,   -1.0f, 1, 0 },	/* seq_out_pos_bd */
+	{   -1.0f,    63.0f,   -1.0f, 1, 0 },	/* seq_out_pos_t1 */
+	{   -1.0f,    63.0f,   -1.0f, 1, 0 },	/* seq_out_pos_t2 */
+	{   -1.0f,    63.0f,   -1.0f, 1, 0 },	/* seq_out_pos_sd */
+	{   -1.0f,    63.0f,   -1.0f, 1, 0 },	/* seq_out_pos_cy */
+	{   -1.0f,    63.0f,   -1.0f, 1, 0 },	/* seq_out_pos_hhc */
+	{   -1.0f,    63.0f,   -1.0f, 1, 0 },	/* seq_out_pos_hho */
+	{    0.0f, 65535.0f,    0.0f, 1, 0 },	/* seq_out_mask */
+	{    0.0f, 65535.0f,    0.0f, 1, 0 },	/* seq_out_grid_bd */
+	{    0.0f, 65535.0f,    0.0f, 1, 0 },	/* seq_out_grid_t1 */
+	{    0.0f, 65535.0f,    0.0f, 1, 0 },	/* seq_out_grid_t2 */
+	{    0.0f, 65535.0f,    0.0f, 1, 0 },	/* seq_out_grid_sd */
+	{    0.0f, 65535.0f,    0.0f, 1, 0 },	/* seq_out_grid_cy */
+	{    0.0f, 65535.0f,    0.0f, 1, 0 },	/* seq_out_grid_hhc */
+	{    0.0f, 65535.0f,    0.0f, 1, 0 },	/* seq_out_grid_hho */
+	{    0.0f,   127.0f,    0.0f, 1, 0 },	/* seq_out_vel1 */
+	{    0.0f,   127.0f,    0.0f, 1, 0 },	/* seq_out_vel2 */
+	{    0.0f,   127.0f,    0.0f, 1, 0 },	/* seq_out_vel3 */
+	{    0.0f,   127.0f,    0.0f, 1, 0 },	/* seq_out_vel4 */
+	{    0.0f,   127.0f,    0.0f, 1, 0 },	/* seq_out_vel5 */
+	{    0.0f,   127.0f,    0.0f, 1, 0 },	/* seq_out_vel6 */
+	{    0.0f,   127.0f,    0.0f, 1, 0 },	/* seq_out_vel7 */
+	{    0.0f,   127.0f,    0.0f, 1, 0 },	/* seq_out_vel8 */
+	{    0.0f,   127.0f,    0.0f, 1, 0 },	/* seq_out_vel9 */
+	{    0.0f,   127.0f,    0.0f, 1, 0 },	/* seq_out_vel10 */
+	{    0.0f,   127.0f,    0.0f, 1, 0 },	/* seq_out_vel11 */
+	{    0.0f,   127.0f,    0.0f, 1, 0 },	/* seq_out_vel12 */
+	{    0.0f,   127.0f,    0.0f, 1, 0 },	/* seq_out_vel13 */
+	{    0.0f,   127.0f,    0.0f, 1, 0 },	/* seq_out_vel14 */
+	{    0.0f,   127.0f,    0.0f, 1, 0 },	/* seq_out_vel15 */
+	{    0.0f,   127.0f,    0.0f, 1, 0 },	/* seq_out_vel16 */
+	{    0.0f,     1.0f,    0.0f, 1, 1 },	/* seq_out_step_active */
+	{    0.0f,   127.0f,    0.0f, 1, 0 },	/* seq_out_step_velocity */
+	{    0.0f,   127.0f,   60.0f, 1, 0 },	/* seq_out_step_note */
+	{    0.0f,   100.0f,  100.0f, 1, 0 },	/* seq_out_step_prob */
+	{    0.0f,     5.0f,    0.0f, 1, 3 },	/* seq_out_step_flam */
+	{   -7.0f,     7.0f,    0.0f, 1, 0 },	/* seq_out_step_shift */
+	{    0.0f,   228.0f,    0.0f, 1, 3 },	/* seq_out_lock1_target */
+	{    0.0f,   127.0f,    0.0f, 1, 0 },	/* seq_out_lock1_value */
+	{    0.0f,   228.0f,    0.0f, 1, 3 },	/* seq_out_lock2_target */
+	{    0.0f,   127.0f,    0.0f, 1, 0 },	/* seq_out_lock2_value */
+};
 
 #endif

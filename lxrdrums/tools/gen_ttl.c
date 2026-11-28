@@ -54,7 +54,7 @@
 #define NAME		"eDrumSynth"
 #define BINARY		"edrumsynth.so"
 #define TTL		"edrumsynth.ttl"
-#define MINOR_VERSION	2
+#define MINOR_VERSION	3
 #define MICRO_VERSION	0
 
 #define MAX_PORTS	400
@@ -791,6 +791,322 @@ static void targetLabel (uint8_t target, char *text, unsigned size)
 	snprintf (text, size, "%s %s", vabbr, t);
 }
 
+
+// ---- the sequencer's panel (0.3.0): control ports after the others ----
+//
+// A window into the LXR's sequencer modelled on its front panel
+// (SEQUENCER_PLAN.md §3): inputs select and edit (the plugin applies an
+// input when its value changes; triggers on a rise above 0.5), outputs show
+// the state (Zynthian's monitors: ≤ 24 bits per float). Symbols are API.
+
+enum { PK_INT, PK_TOGGLE, PK_TRIGGER, PK_ENUM, PK_FLOAT };
+
+typedef struct
+{
+	const char *sym, *name;
+	int group;		// index into panelGroups
+	uint8_t kind;
+	float min, max, def;
+	const char *labels;	// PK_ENUM: "a|b|c" for min..max, or "@targets" (the modulation targets)
+	const char *comment;
+} PanelPort;
+
+static const struct
+{
+	const char *sym, *name;
+	int output;
+} panelGroups[] = {
+	{ "seq_transport", "Seq Transport", 0 },
+	{ "seq_pattern", "Seq Pattern", 0 },
+	{ "seq_select", "Seq Select", 0 },
+	{ "seq_step", "Seq Step", 0 },
+	{ "seq_locks", "Seq Step Locks", 0 },
+	{ "seq_track", "Seq Track", 0 },
+	{ "seq_mutes", "Seq Mutes", 0 },
+	{ "seq_buttons", "Seq Step Buttons", 0 },
+	{ "seq_actions", "Seq Actions", 0 },
+	{ "seq_status", "Seq Status", 1 },
+	{ "seq_positions", "Seq Positions", 1 },
+	{ "seq_page", "Seq Page", 1 },
+	{ "seq_read", "Seq Step Read", 1 },
+};
+#define NUM_PANEL_GROUPS (int) (sizeof panelGroups / sizeof panelGroups[0])
+enum { PG_TRANSPORT, PG_PATTERN, PG_SELECT, PG_STEP, PG_LOCKS, PG_TRACK, PG_MUTES, PG_BUTTONS, PG_ACTIONS, PG_STATUS,
+       PG_POSITIONS, PG_PAGE, PG_READ };
+
+static const char *const trackLabels = "Bass Drum|Tom 1|Tom 2|Snare|Cymbal|Hi-Hat Closed|Hi-Hat Open";
+static const char *const trackAbbr[7] = { "bd", "t1", "t2", "sd", "cy", "hhc", "hho" };
+static const char *const trackNames[7] = { "BD", "T1", "T2", "SD", "CY", "HHC", "HHO" };
+
+#define MAX_PANEL 128
+static PanelPort panel[MAX_PANEL];
+static int numPanel;
+static char panelStrings[MAX_PANEL][2][64];	// generated symbols and names
+
+static PanelPort *addPanel (const char *sym, const char *name, int group, uint8_t kind, float min, float max, float def,
+			    const char *labels, const char *comment)
+{
+	if (numPanel >= MAX_PANEL)
+	{
+		fprintf (stderr, "gen_ttl: too many panel ports\n");
+		exit (1);
+	}
+	PanelPort *p = &panel[numPanel++];
+	p->sym = sym;
+	p->name = name;
+	p->group = group;
+	p->kind = kind;
+	p->min = min;
+	p->max = max;
+	p->def = def;
+	p->labels = labels;
+	p->comment = comment;
+	return p;
+}
+
+// a numbered port: symbol and name built from the formats and n
+static PanelPort *addPanelN (const char *symFmt, const char *nameFmt, const char *arg, int n, int group, uint8_t kind,
+			     float min, float max, float def, const char *comment)
+{
+	char *sym = panelStrings[numPanel][0], *name = panelStrings[numPanel][1];
+	if (arg)
+	{
+		snprintf (sym, 64, symFmt, arg);
+		snprintf (name, 64, nameFmt, n >= 0 ? trackNames[n] : arg);
+	}
+	else
+	{
+		snprintf (sym, 64, symFmt, n);
+		snprintf (name, 64, nameFmt, n);
+	}
+	return addPanel (sym, name, group, kind, min, max, def, NULL, comment);
+}
+
+static void collectPanel (void)
+{
+	// inputs
+	addPanel ("seq_mode", "Seq Mode", PG_TRANSPORT, PK_ENUM, 0, 2, 1, "Off|Host|Internal",
+		  "Off: the sequencer does not play (MIDI only, as 0.2.0); Host: it follows the host's transport "
+		  "(time:Position: rolling, bar / beat, tempo); Internal: its own tempo, started by Play");
+	addPanel ("seq_play", "Play", PG_TRANSPORT, PK_TOGGLE, 0, 1, 0, NULL,
+		  "Internal mode: on starts the sequencer at the start, off stops it (as the LXR's start / stop button)");
+	addPanel ("seq_tempo", "Tempo", PG_TRANSPORT, PK_INT, 20, 300, 120, NULL, "Internal mode: the tempo in BPM");
+	addPanel ("seq_shuffle", "Shuffle", PG_TRANSPORT, PK_INT, 0, 127, 0, NULL,
+		  "the edited pattern's shuffle (odd steps late by up to 2/3 of a step); the playing pattern's at once");
+	addPanel ("seq_pattern", "Pattern", PG_PATTERN, PK_INT, 0, 63, 0, NULL,
+		  "the pattern to play: it starts when the playing one ends (stopped: at once), as the LXR's pattern buttons");
+	addPanel ("seq_song_mode", "Song Mode", PG_PATTERN, PK_TOGGLE, 0, 1, 0, NULL,
+		  "on: the song plays its patterns in turn (from its start at the next start)");
+	addPanel ("seq_song", "Song", PG_PATTERN, PK_INT, 0, 63, 0, NULL, "the song song mode plays");
+	addPanel ("seq_kit_autoload", "Kit Autoload", PG_PATTERN, PK_TOGGLE, 0, 1, 1, NULL,
+		  "on: a pattern loads its kit when it starts (the LXR's pattern change mode 'auto'); patterns without "
+		  "a kit in the project keep the sound");
+	addPanel ("seq_edit_pattern", "Edit Pattern", PG_SELECT, PK_INT, 0, 64, 64, NULL,
+		  "the pattern the panel edits: 0-63, 64 the playing one");
+	addPanel ("seq_track", "Edit Track", PG_SELECT, PK_ENUM, 0, 6, 0, trackLabels, "the track the panel edits");
+	addPanel ("seq_page", "Edit Page", PG_SELECT, PK_ENUM, 0, 3, 0, "1-16|17-32|33-48|49-64",
+		  "the 16 steps the step buttons and the page outputs show");
+	addPanel ("seq_step", "Edit Step", PG_SELECT, PK_INT, 0, 15, 0, NULL,
+		  "the step of the page the step fields edit (a step button selects it too)");
+	addPanel ("seq_step_velocity", "Velocity", PG_STEP, PK_INT, 0, 127, 127, NULL, "the selected step's velocity");
+	addPanel ("seq_step_note", "Note", PG_STEP, PK_INT, 0, 127, 60, NULL,
+		  "the selected step's note: 60 plays the voice as tuned, others shift its oscillators in semitones");
+	addPanel ("seq_step_prob", "Probability", PG_STEP, PK_INT, 0, 100, 100, NULL, "the selected step's probability (%)");
+	addPanel ("seq_step_flam", "Flam", PG_STEP, PK_ENUM, 0, 5, 0, "Off|x2|x3|x4|x6|x8", "the selected step's hits");
+	addPanel ("seq_step_shift", "Shift", PG_STEP, PK_INT, -7, 7, 0, NULL,
+		  "the selected step's time shift in eighths of a step (negative: earlier)");
+	addPanel ("seq_lock1_target", "Lock 1", PG_LOCKS, PK_ENUM, 0, 0, 0, "@targets",
+		  "the parameter the selected step sets (a parameter lock: back to the kit's value at the track's next step)");
+	addPanel ("seq_lock1_value", "Lock 1 Value", PG_LOCKS, PK_INT, 0, 127, 0, NULL, "the value lock 1 sets");
+	addPanel ("seq_lock2_target", "Lock 2", PG_LOCKS, PK_ENUM, 0, 0, 0, "@targets", "the second parameter lock");
+	addPanel ("seq_lock2_value", "Lock 2 Value", PG_LOCKS, PK_INT, 0, 127, 0, NULL, "the value lock 2 sets");
+	addPanel ("seq_track_length", "Length", PG_TRACK, PK_INT, 1, 64, 16, NULL,
+		  "the edited track's length in steps (tracks of different lengths run against each other)");
+	addPanel ("seq_euclid_fill", "Euclid Steps", PG_TRACK, PK_INT, 1, 64, 4, NULL,
+		  "the Euclid generator: steps spread evenly over the track's length");
+	addPanel ("seq_euclid_rotation", "Euclid Rotation", PG_TRACK, PK_INT, 0, 63, 0, NULL, "the Euclid generator's rotation");
+	addPanel ("seq_euclid", "Euclid", PG_TRACK, PK_TRIGGER, 0, 1, 0, NULL,
+		  "writes the Euclid pattern into the edited track (its steps replaced)");
+	for (int t = 0; t < 7; t++)
+	{
+		addPanelN ("seq_mute_%s", "Mute %s", trackAbbr[t], t, PG_MUTES, PK_TOGGLE, 0, 1, 0, NULL);
+	}
+	for (int i = 1; i <= 16; i++)
+	{
+		addPanelN ("seq_button%d", "Step %d", NULL, i, PG_BUTTONS, PK_TRIGGER, 0, 1, 0,
+			   i == 1 ? "toggles the step of the page on the edited track, and selects it (the LXR's step buttons)" : NULL);
+	}
+	addPanel ("seq_kit", "Kit", PG_ACTIONS, PK_INT, 0, 64, 0, NULL, "the edited pattern's kit (0-63, 64 none)");
+	addPanel ("seq_store_kit", "Store Kit", PG_ACTIONS, PK_TRIGGER, 0, 1, 0, NULL,
+		  "stores the sound (the kit as it is now) as the edited pattern's kit (none: into a free kit slot)");
+	addPanel ("seq_clear_track", "Clear Track", PG_ACTIONS, PK_TRIGGER, 0, 1, 0, NULL, "clears the edited track");
+	addPanel ("seq_clear_pattern", "Clear Pattern", PG_ACTIONS, PK_TRIGGER, 0, 1, 0, NULL, "clears the edited pattern");
+	addPanel ("seq_copy_pattern", "Copy Pattern", PG_ACTIONS, PK_TRIGGER, 0, 1, 0, NULL, "remembers the edited pattern");
+	addPanel ("seq_paste_pattern", "Paste Pattern", PG_ACTIONS, PK_TRIGGER, 0, 1, 0, NULL,
+		  "copies the remembered pattern into the edited one");
+
+	// outputs
+	addPanel ("seq_out_running", "Running", PG_STATUS, PK_TOGGLE, 0, 1, 0, NULL, "the sequencer plays");
+	addPanel ("seq_out_playing", "Playing", PG_STATUS, PK_INT, 0, 63, 0, NULL, "the pattern playing");
+	addPanel ("seq_out_next", "Next", PG_STATUS, PK_INT, 0, 63, 0, NULL, "the pattern after it");
+	addPanel ("seq_out_song_pos", "Song Position", PG_STATUS, PK_INT, 0, 63, 0, NULL, "song mode: the song's entry playing");
+	addPanel ("seq_out_edit_pattern", "Edited Pattern", PG_STATUS, PK_INT, 0, 63, 0, NULL, "the pattern the panel edits");
+	addPanel ("seq_out_bpm", "BPM", PG_STATUS, PK_FLOAT, 0, 1000, 0, NULL, "the sequencer's tempo");
+	addPanel ("seq_out_flash", "Triggers", PG_STATUS, PK_INT, 0, 127, 0, NULL,
+		  "a bit per track (1 bass drum .. 64 open hi-hat): triggered in the last 80 ms (sequencer and MIDI)");
+	addPanel ("seq_out_mutes", "Mutes", PG_STATUS, PK_INT, 0, 127, 0, NULL, "a bit per track: muted");
+	addPanel ("seq_out_pattern_length", "Pattern Length", PG_STATUS, PK_INT, 1, 64, 16, NULL,
+		  "the edited pattern's length (its longest track)");
+	addPanel ("seq_out_track_length", "Track Length", PG_STATUS, PK_INT, 1, 64, 16, NULL, "the edited track's length");
+	addPanel ("seq_out_shuffle", "Pattern Shuffle", PG_STATUS, PK_INT, 0, 127, 0, NULL, "the edited pattern's shuffle");
+	addPanel ("seq_out_kit", "Pattern Kit", PG_STATUS, PK_INT, 0, 64, 64, NULL, "the edited pattern's kit (64 none)");
+	addPanel ("seq_out_kit_present", "Kit Present", PG_STATUS, PK_TOGGLE, 0, 1, 0, NULL,
+		  "the project holds the edited pattern's kit");
+	addPanel ("seq_out_selected", "Selected Step", PG_STATUS, PK_INT, 0, 63, 0, NULL,
+		  "the step the step fields edit (Edit Page and Edit Step, or the step button pressed last)");
+	for (int t = 0; t < 7; t++)
+	{
+		addPanelN ("seq_out_pos_%s", "Position %s", trackAbbr[t], t, PG_POSITIONS, PK_INT, -1, 63, -1,
+			   t == 0 ? "the track's step playing (-1: stopped)" : NULL);
+	}
+	addPanel ("seq_out_mask", "Page Steps", PG_PAGE, PK_INT, 0, 65535, 0, NULL,
+		  "the edited track's steps on the page: bit i (value 2^i) = step i + 1 of the page on");
+	for (int t = 0; t < 7; t++)
+	{
+		addPanelN ("seq_out_grid_%s", "Page %s", trackAbbr[t], t, PG_PAGE, PK_INT, 0, 65535, 0,
+			   t == 0 ? "the track's steps on the page, as Page Steps" : NULL);
+	}
+	for (int i = 1; i <= 16; i++)
+	{
+		addPanelN ("seq_out_vel%d", "Velocity %d", NULL, i, PG_PAGE, PK_INT, 0, 127, 0,
+			   i == 1 ? "the velocity of the edited track's step i of the page" : NULL);
+	}
+	addPanel ("seq_out_step_active", "Step On", PG_READ, PK_TOGGLE, 0, 1, 0, NULL, "the selected step plays");
+	addPanel ("seq_out_step_velocity", "Step Velocity", PG_READ, PK_INT, 0, 127, 0, NULL, "the selected step's fields as they are");
+	addPanel ("seq_out_step_note", "Step Note", PG_READ, PK_INT, 0, 127, 60, NULL, NULL);
+	addPanel ("seq_out_step_prob", "Step Probability", PG_READ, PK_INT, 0, 100, 100, NULL, NULL);
+	addPanel ("seq_out_step_flam", "Step Flam", PG_READ, PK_ENUM, 0, 5, 0, "Off|x2|x3|x4|x6|x8", NULL);
+	addPanel ("seq_out_step_shift", "Step Shift", PG_READ, PK_INT, -7, 7, 0, NULL, NULL);
+	addPanel ("seq_out_lock1_target", "Step Lock 1", PG_READ, PK_ENUM, 0, 0, 0, "@targets", NULL);
+	addPanel ("seq_out_lock1_value", "Step Lock 1 Value", PG_READ, PK_INT, 0, 127, 0, NULL, NULL);
+	addPanel ("seq_out_lock2_target", "Step Lock 2", PG_READ, PK_ENUM, 0, 0, 0, "@targets", NULL);
+	addPanel ("seq_out_lock2_value", "Step Lock 2 Value", PG_READ, PK_INT, 0, 127, 0, NULL, NULL);
+
+	for (int i = 0; i < numPanel; i++)
+	{
+		PanelPort *p = &panel[i];
+		if (p->labels && !strcmp (p->labels, "@targets"))
+		{
+			p->max = (float) (getNumModTargets () - 1);
+		}
+		for (int j = 0; j < numPorts; j++)
+		{
+			if (!strcmp (ports[j].sym, p->sym))
+			{
+				fprintf (stderr, "gen_ttl: %s: duplicate symbol\n", p->sym);
+				exit (1);
+			}
+		}
+		for (int j = 0; j < i; j++)
+		{
+			if (!strcmp (panel[j].sym, p->sym))
+			{
+				fprintf (stderr, "gen_ttl: %s: duplicate symbol\n", p->sym);
+				exit (1);
+			}
+		}
+		if (strncmp (p->sym, "seq_", 4) || strlen (p->sym) > 40)
+		{
+			fprintf (stderr, "gen_ttl: %s: panel symbols start with seq_\n", p->sym);
+			exit (1);
+		}
+		const int output = panelGroups[p->group].output;
+		if (output != !strncmp (p->sym, "seq_out_", 8) || (output && p->kind == PK_TRIGGER))
+		{
+			fprintf (stderr, "gen_ttl: %s: outputs are seq_out_*, not triggers\n", p->sym);
+			exit (1);
+		}
+	}
+}
+
+static int panelOutput (const PanelPort *p)
+{
+	return panelGroups[p->group].output;
+}
+
+// the label of an enumeration value
+static void panelLabel (const PanelPort *p, int v, char *text, unsigned size)
+{
+	if (!strcmp (p->labels, "@targets"))
+	{
+		targetLabel ((uint8_t) v, text, size);
+		return;
+	}
+	const char *s = p->labels;
+	for (int i = (int) p->min; i < v && s; i++)
+	{
+		s = strchr (s, '|');
+		s = s ? s + 1 : NULL;
+	}
+	const char *e = s ? strchr (s, '|') : NULL;
+	snprintf (text, size, "%.*s", s ? (int) (e ? e - s : (int) strlen (s)) : 0, s ? s : "");
+}
+
+static void writePanelPort (FILE *f, const PanelPort *p, int index, int prio)
+{
+	const int output = panelOutput (p);
+	fprintf (f, " , [\n\t\ta lv2:%s , lv2:ControlPort ;\n\t\tlv2:index %d ;\n\t\tlv2:symbol \"%s\" ;\n\t\tlv2:name ",
+		 output ? "OutputPort" : "InputPort", index, p->sym);
+	ttl_string (f, p->name);
+	if (p->comment)
+	{
+		fprintf (f, " ;\n\t\trdfs:comment ");
+		ttl_string (f, p->comment);
+	}
+	if (p->kind == PK_FLOAT)
+	{
+		if (!output)
+		{
+			fprintf (f, " ;\n\t\tlv2:default %.1f", p->def);
+		}
+		fprintf (f, " ;\n\t\tlv2:minimum %.1f ;\n\t\tlv2:maximum %.1f", p->min, p->max);
+	}
+	else
+	{
+		if (!output)
+		{
+			fprintf (f, " ;\n\t\tlv2:default %.0f", p->def);
+		}
+		fprintf (f, " ;\n\t\tlv2:minimum %.0f ;\n\t\tlv2:maximum %.0f", p->min, p->max);
+	}
+	switch (p->kind)
+	{
+	case PK_TOGGLE:
+		fprintf (f, " ;\n\t\tlv2:portProperty lv2:toggled");
+		break;
+	case PK_TRIGGER:
+		fprintf (f, " ;\n\t\tlv2:portProperty lv2:toggled , pprops:trigger");
+		break;
+	case PK_INT:
+		fprintf (f, " ;\n\t\tlv2:portProperty lv2:integer");
+		break;
+	case PK_ENUM:
+		fprintf (f, " ;\n\t\tlv2:portProperty lv2:integer , lv2:enumeration ;\n\t\tlv2:scalePoint ");
+		for (int v = (int) p->min; v <= (int) p->max; v++)
+		{
+			char label[96];
+			panelLabel (p, v, label, sizeof label);
+			fprintf (f, "%s[ rdfs:label ", v > (int) p->min ? " , " : "");
+			ttl_string (f, label);
+			fprintf (f, " ; rdf:value %d ]", v);
+		}
+		break;
+	default:
+		break;
+	}
+	fprintf (f, " ;\n\t\tpg:group <" URI "#%s> ;\n\t\tlv2:displayPriority %d\n\t]", panelGroups[p->group].sym, prio);
+}
+
 static void valueLabel (const Port *p, int v, char *text, unsigned size)
 {
 	switch (p->type)
@@ -862,14 +1178,22 @@ static const char *engineList (uint8_t engines, char *text, unsigned size)
 static void writePlugin (FILE *f)
 {
 	fprintf (f, "# generated by tools/gen_ttl.c from the drum engine's tables: do not edit\n");
-	ttl_prefixes (f, "atom doap foaf lv2 midi param pg rdf rdfs time urid");
+	ttl_prefixes (f, "atom doap foaf lv2 midi param pg pprops rdf rdfs state time urid");
 
 	// the groups, lv2:displayPriority as Zynthian reads it (lv2core
-	// namespace): the first group highest
+	// namespace): the first group highest; the sequencer's panel last
 	ttl_output_group (f, URI);
+	const int allGroups = numGroups + NUM_PANEL_GROUPS;
 	for (int g = 0; g < numGroups; g++)
 	{
-		ttl_group (f, URI, groups[g].sym, groups[g].name, groups[g].cls, numGroups - g);
+		ttl_group (f, URI, groups[g].sym, groups[g].name, groups[g].cls, allGroups - g);
+	}
+	for (int g = 0; g < NUM_PANEL_GROUPS; g++)
+	{
+		if (panelGroups[g].output)
+			ttl_output_control_group (f, URI, panelGroups[g].sym, panelGroups[g].name, NUM_PANEL_GROUPS - g);
+		else
+			ttl_group (f, URI, panelGroups[g].sym, panelGroups[g].name, NULL, NUM_PANEL_GROUPS - g);
 	}
 
 	fprintf (f,
@@ -885,9 +1209,12 @@ static void writePlugin (FILE *f)
 		 "\trdfs:comment \"Synthesized drums: six voices (bass drum, two toms, snare, cymbal, hi-hat closed and open) "
 		 "from MicroDexed-touch's drum engine, the voices of the OpenElixir-02 firmware (based on the open source "
 		 "LXR V2 firmware by Erica Synths). Each voice runs a drum, snare, cymbal or hi-hat engine. General MIDI "
-		 "drum notes, or channels 1-7 playing the voices chromatically; every voice parameter as a control.\" ;\n"
+		 "drum notes, or channels 1-7 playing the voices chromatically; every voice parameter as a control. The "
+		 "LXR's step sequencer (patterns with parameter locks, flams, probabilities, kits per pattern, songs) "
+		 "following the host's transport, edited through the Seq controls; the project is the plugin's state.\" ;\n"
 		 "\tlv2:requiredFeature urid:map ;\n"
 		 "\tlv2:optionalFeature lv2:hardRTCapable , lv2:isLive ;\n"
+		 "\tlv2:extensionData state:interface ;\n"
 		 "\tpg:mainOutput <" URI "#out> ;\n",
 		 MINOR_VERSION, MICRO_VERSION);
 
@@ -944,6 +1271,11 @@ static void writePlugin (FILE *f)
 		}
 		fprintf (f, " ;\n\t\tpg:group <" URI "#%s> ;\n\t\tlv2:displayPriority %d\n\t]", groups[p->group].sym,
 			 100 - p->index);
+	}
+	for (int i = 0, inGroup = 0; i < numPanel; i++)
+	{
+		inGroup = i > 0 && panel[i - 1].group == panel[i].group ? inGroup + 1 : 0;
+		writePanelPort (f, &panel[i], PORT_CONTROL0 + numPorts + i, 100 - inGroup);
 	}
 	fprintf (f, " .\n");
 }
@@ -1102,7 +1434,9 @@ static void writePortsH (FILE *f)
 		 "#define EDS_PORT_OUT_R\t\t2\n"
 		 "#define EDS_PORT_CONTROL0\t%d\n"
 		 "#define EDS_NUM_CONTROLS\t%d\n"
-		 "#define EDS_NUM_PORTS\t\t(EDS_PORT_CONTROL0 + EDS_NUM_CONTROLS)\n"
+		 "#define EDS_PORT_PANEL0\t\t(EDS_PORT_CONTROL0 + EDS_NUM_CONTROLS)\t/* the sequencer's panel */\n"
+		 "#define EDS_NUM_PANEL\t\t%d\n"
+		 "#define EDS_NUM_PORTS\t\t(EDS_PORT_PANEL0 + EDS_NUM_PANEL)\n"
 		 "\n"
 		 "#define EDS_SLOTS\t\t%d\n"
 		 "#define EDS_GLOBAL\t\tEDS_SLOTS\t/* the slot of the FX bus and master controls */\n"
@@ -1126,7 +1460,7 @@ static void writePortsH (FILE *f)
 		 "} eds_control;\n"
 		 "\n"
 		 "static const eds_control eds_controls[EDS_NUM_CONTROLS] = {\n",
-		 PORT_CONTROL0, numPorts, SLOTS, ALL_ENGINES);
+		 PORT_CONTROL0, numPorts, numPanel, SLOTS, ALL_ENGINES);
 	int engineControls[SLOTS] = { 0 }, midiMode = 0, lxrCc = 0;
 	for (int i = 0; i < numPorts; i++)
 	{
@@ -1147,7 +1481,33 @@ static void writePortsH (FILE *f)
 	{
 		fprintf (f, "%s%d", s ? ", " : " ", engineControls[s]);
 	}
-	fprintf (f, " };\n#define EDS_MIDI_MODE_CONTROL\t%d\n#define EDS_LXR_CC_CONTROL\t%d\n\n#endif\n", midiMode, lxrCc);
+	fprintf (f, " };\n#define EDS_MIDI_MODE_CONTROL\t%d\n#define EDS_LXR_CC_CONTROL\t%d\n\n", midiMode, lxrCc);
+
+	fprintf (f, "/* the sequencer's panel: port EDS_PORT_PANEL0 + i, an input or an output\n"
+		    "   (output); kind: an integer, a toggle, a trigger, an enumeration or\n"
+		    "   a float; min..max, def: the port's range and default */\n"
+		    "enum { EDS_PK_INT, EDS_PK_TOGGLE, EDS_PK_TRIGGER, EDS_PK_ENUM, EDS_PK_FLOAT };\n"
+		    "typedef struct\n{\n\tfloat min, max, def;\n\tuint8_t output, kind;\n} eds_panel_port;\n\n"
+		    "enum\n{\n");
+	for (int i = 0; i < numPanel; i++)
+	{
+		char name[64];
+		snprintf (name, sizeof name, "%s", panel[i].sym + 4);
+		for (char *c = name; *c; c++)
+		{
+			*c = (char) (*c >= 'a' && *c <= 'z' ? *c - 'a' + 'A' : *c);
+		}
+		fprintf (f, "\tEDS_P_%s,%s/* %3d %s */\n", name, strlen (name) < 12 ? "\t\t\t" : strlen (name) < 20 ? "\t\t" : "\t",
+			 PORT_CONTROL0 + numPorts + i, panel[i].sym);
+	}
+	fprintf (f, "};\n\nstatic const eds_panel_port eds_panel[EDS_NUM_PANEL] = {\n");
+	for (int i = 0; i < numPanel; i++)
+	{
+		const PanelPort *p = &panel[i];
+		fprintf (f, "\t{ %6.1ff, %7.1ff, %6.1ff, %d, %d },\t/* %s */\n", p->min, p->max, p->def, panelOutput (p), p->kind,
+			 p->sym);
+	}
+	fprintf (f, "};\n\n#endif\n");
 }
 
 static void jsonString (FILE *f, const char *s)
@@ -1231,6 +1591,22 @@ static void writePortsJson (FILE *f)
 			fprintf (f, ", \"kit_init\": %u", init[p->param]);
 		fprintf (f, " }%s\n", i < numPorts - 1 ? "," : "");
 	}
+	// the sequencer's panel
+	static const char *const kinds[] = { "integer", "toggle", "trigger", "enum", "float" };
+	fprintf (f, "\t],\n\t\"panel_ports\": [\n");
+	for (int i = 0; i < numPanel; i++)
+	{
+		const PanelPort *p = &panel[i];
+		fprintf (f, "\t\t{ \"symbol\": \"%s\", \"index\": %d, \"name\": ", p->sym, PORT_CONTROL0 + numPorts + i);
+		jsonString (f, p->name);
+		fprintf (f, ", \"group\": \"%s\", \"direction\": \"%s\", \"kind\": \"%s\", \"min\": %g, \"max\": %g",
+			 panelGroups[p->group].sym, panelOutput (p) ? "output" : "input", kinds[p->kind], p->min, p->max);
+		if (!panelOutput (p))
+		{
+			fprintf (f, ", \"default\": %g", p->def);
+		}
+		fprintf (f, " }%s\n", i < numPanel - 1 ? "," : "");
+	}
 	// the kit parameters without a port (unused, or not exposed: their
 	// init kit values)
 	fprintf (f, "\t],\n\t\"unmapped_kit_params\": {");
@@ -1283,12 +1659,17 @@ int main (int argc, char **argv)
 {
 	lxr_engine_init ();
 	collect ();
+	collectPanel ();
 
 	if (argc == 2 && !strcmp (argv[1], "--symbols"))
 	{
 		for (int i = 0; i < numPorts; i++)
 		{
 			printf ("%s\n", ports[i].sym);
+		}
+		for (int i = 0; i < numPanel; i++)
+		{
+			printf ("%s\n", panel[i].sym);
 		}
 		return 0;
 	}
@@ -1306,6 +1687,24 @@ int main (int argc, char **argv)
 			printf ("%-32s %2d controls, %d page%s\n", groups[g].name, n, (n + 3) / 4, n > 4 ? "s" : "");
 			pages += (n + 3) / 4;
 		}
+		int panelControls = 0;
+		for (int g = 0; g < NUM_PANEL_GROUPS; g++)
+		{
+			int n = 0;
+			for (int i = 0; i < numPanel; i++)
+			{
+				n += panel[i].group == g;
+			}
+			if (panelGroups[g].output)
+			{
+				printf ("%-32s %2d outputs\n", panelGroups[g].name, n);
+				continue;
+			}
+			printf ("%-32s %2d controls, %d page%s\n", panelGroups[g].name, n, (n + 3) / 4, n > 4 ? "s" : "");
+			pages += (n + 3) / 4;
+			panelControls += n;
+		}
+		printf ("panel: %d inputs, %d outputs\n", panelControls, numPanel - panelControls);
 		printf ("%d groups, %d controls, %d pages\n", numGroups, numPorts, pages);
 		return 0;
 	}

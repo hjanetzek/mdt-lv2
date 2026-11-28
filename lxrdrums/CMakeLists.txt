@@ -54,7 +54,7 @@ set_source_files_properties (${ENGINE_SRC} PROPERTIES
 add_library (edrumsynth MODULE src/edrumsynth.c src/resampler.c ${ENGINE_SRC})
 target_include_directories (edrumsynth PRIVATE src ${ENGINE}/src ${LV2_INCLUDE_DIR})
 set_source_files_properties (src/edrumsynth.c src/resampler.c tools/gen_ttl.c tests/render_test.c tests/resampler_test.c
-	${COMMON}/testhost/testhost.c
+	tests/seq_test.c ${COMMON}/testhost/testhost.c
 	PROPERTIES COMPILE_OPTIONS "-Wall;-Wextra")
 set_target_properties (edrumsynth PROPERTIES
 	PREFIX ""
@@ -177,6 +177,18 @@ if (EDS_TESTS AND NOT CMAKE_CROSSCOMPILING)
 	if (Python3_Interpreter_FOUND)
 		add_test (NAME converter COMMAND ${Python3_EXECUTABLE} -I ${TESTS}/converter_test.py)
 	endif ()
+
+	# the sequencer: the ported LXR sequencer on the engine (triggers,
+	# locks, kits, songs), the plugin's transport, panel and state against
+	# it; with Python the LXR project converter (tools/lxr2preset.py)
+	add_executable (seq_test tests/seq_test.c ${COMMON}/testhost/testhost.c ${ENGINE_SRC})
+	target_include_directories (seq_test PRIVATE src ${COMMON}/testhost ${ENGINE}/src ${LV2_INCLUDE_DIR})
+	target_link_libraries (seq_test PRIVATE ${CMAKE_DL_LIBS})
+	if (MATH_LIBRARY)
+		target_link_libraries (seq_test PRIVATE ${MATH_LIBRARY})
+	endif ()
+	add_dependencies (seq_test edrumsynth)
+	add_test (NAME sequencer COMMAND seq_test $<TARGET_FILE:edrumsynth>)
 
 	add_executable (resampler_test tests/resampler_test.c src/resampler.c)
 	target_include_directories (resampler_test PRIVATE src)
