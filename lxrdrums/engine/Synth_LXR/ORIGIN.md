@@ -15,6 +15,22 @@ The plugin builds only `src/lxr_engine.c` (with `-std=gnu17 -I lxr -I lxr/shim`)
 `src/synth_lxr.cpp/.h` (the Teensy Audio object) and `library.json` are kept
 for comparison with MDT and are not built.
 
+## The sequencer (not in MicroDexed-touch)
+
+For eDrumSynth 0.3.0 the LXR's own step sequencer was added from
+OpenElixir-02 (https://github.com/tunefish777/openelixir-02, commit `383b012`,
+version 1.2, the base of the engine sources), unchanged at first:
+
+- `Core/Src/Soundengine/Sequencer/sequencer.c`, `clockSync.c`,
+  `EuklidGenerator.c` and `Core/Inc/Soundengine/Sequencer/sequencer.h`,
+  `clockSync.h`, `EuklidGenerator.h` -> `lxr/Soundengine/Sequencer/`
+- `Core/Inc/Preset/SeqStep.h` -> `lxr/Preset/SeqStep.h`
+- `Core/Src/Soundengine/DSPAudio/automationNode.c` ->
+  `lxr/Soundengine/DSPAudio/` (the step automation: parameter locks)
+
+The shim's stand-ins `lxr/shim/Soundengine/Sequencer/sequencer.h` and
+`clockSync.h` are gone; `lxr/shim/lxr_glue.h` includes the real header.
+
 ## Changes in this copy
 
 Changes for the LV2 plugin are marked `LV2:` in the code and listed here, so

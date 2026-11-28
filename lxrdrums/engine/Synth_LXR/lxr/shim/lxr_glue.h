@@ -13,31 +13,8 @@
 #include "Soundengine/MIDI/MidiMessages.h"
 #include "Parameters.h"
 
-// sequencer.h: MDT plays the voices with its own sequencer, so the LXR's
-// patterns (and their step automation, KitEngines.c) are empty
-#define SEQ_DEFAULT_NOTE 60
-#define NUM_PATTERN 0
-#define NUM_TRACKS 7
-#define NUM_STEPS 1
-typedef struct StepStruct
-{
-	uint8_t volume, prob, note;
-	uint8_t param1Nr, param1Val;
-	uint8_t param2Nr, param2Val;
-} Step;
-typedef struct
-{
-	Step seq_subStepPattern[NUM_PATTERN][NUM_TRACKS][NUM_STEPS];
-} PatternSet;
-extern PatternSet seq_patternSet;
-static inline uint16_t seq_automationTarget (const uint8_t stored)
-{
-	if (stored == 0 || stored == 0xff)
-		return PAR_NONE;
-	return stored < 128 ? (uint16_t) (stored - 1) : stored;
-}
-uint16_t seq_getBpm (void);
-void seq_setMute (uint8_t trackNr, uint8_t isMuted);
+// sequencer.h, SeqStep.h: the LXR's own (lxr/Soundengine/Sequencer/)
+#include "Soundengine/Sequencer/sequencer.h"
 
 // PresetManager.h: the autosave of the LXR's kit (none)
 typedef enum { PRESET_KIT_TIMER, PRESET_PAT_TIMER } PresetTimer;
