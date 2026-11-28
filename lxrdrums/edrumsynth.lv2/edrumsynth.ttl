@@ -523,7 +523,7 @@
 	doap:homepage <https://github.com/hjanetzek/mdt-lv2> ;
 	doap:shortdesc "Synthesized drums" ;
 	lv2:minorVersion 3 ;
-	lv2:microVersion 0 ;
+	lv2:microVersion 1 ;
 	rdfs:comment "Synthesized drums: six voices (bass drum, two toms, snare, cymbal, hi-hat closed and open) from MicroDexed-touch's drum engine, the voices of the OpenElixir-02 firmware (based on the open source LXR V2 firmware by Erica Synths). Each voice runs a drum, snare, cymbal or hi-hat engine. General MIDI drum notes, or channels 1-7 playing the voices chromatically; every voice parameter as a control. The LXR's step sequencer (patterns with parameter locks, flams, probabilities, kits per pattern, songs) following the host's transport, edited through the Seq controls; the project is the plugin's state." ;
 	lv2:requiredFeature urid:map ;
 	lv2:optionalFeature lv2:hardRTCapable , lv2:isLive ;
@@ -4175,6 +4175,7 @@
 		lv2:minimum 0 ;
 		lv2:maximum 127 ;
 		lv2:portProperty lv2:integer ;
+		lv2:portProperty pprops:notAutomatic ;
 		pg:group <https://github.com/hjanetzek/mdt-lv2/edrumsynth#seq_transport> ;
 		lv2:displayPriority 97
 	] , [
@@ -4235,6 +4236,7 @@
 		lv2:minimum 0 ;
 		lv2:maximum 64 ;
 		lv2:portProperty lv2:integer ;
+		lv2:portProperty pprops:notAutomatic ;
 		pg:group <https://github.com/hjanetzek/mdt-lv2/edrumsynth#seq_select> ;
 		lv2:displayPriority 100
 	] , [
@@ -4248,6 +4250,7 @@
 		lv2:maximum 6 ;
 		lv2:portProperty lv2:integer , lv2:enumeration ;
 		lv2:scalePoint [ rdfs:label "Bass Drum" ; rdf:value 0 ] , [ rdfs:label "Tom 1" ; rdf:value 1 ] , [ rdfs:label "Tom 2" ; rdf:value 2 ] , [ rdfs:label "Snare" ; rdf:value 3 ] , [ rdfs:label "Cymbal" ; rdf:value 4 ] , [ rdfs:label "Hi-Hat Closed" ; rdf:value 5 ] , [ rdfs:label "Hi-Hat Open" ; rdf:value 6 ] ;
+		lv2:portProperty pprops:notAutomatic ;
 		pg:group <https://github.com/hjanetzek/mdt-lv2/edrumsynth#seq_select> ;
 		lv2:displayPriority 99
 	] , [
@@ -4261,6 +4264,7 @@
 		lv2:maximum 3 ;
 		lv2:portProperty lv2:integer , lv2:enumeration ;
 		lv2:scalePoint [ rdfs:label "1-16" ; rdf:value 0 ] , [ rdfs:label "17-32" ; rdf:value 1 ] , [ rdfs:label "33-48" ; rdf:value 2 ] , [ rdfs:label "49-64" ; rdf:value 3 ] ;
+		lv2:portProperty pprops:notAutomatic ;
 		pg:group <https://github.com/hjanetzek/mdt-lv2/edrumsynth#seq_select> ;
 		lv2:displayPriority 98
 	] , [
@@ -4273,6 +4277,7 @@
 		lv2:minimum 0 ;
 		lv2:maximum 15 ;
 		lv2:portProperty lv2:integer ;
+		lv2:portProperty pprops:notAutomatic ;
 		pg:group <https://github.com/hjanetzek/mdt-lv2/edrumsynth#seq_select> ;
 		lv2:displayPriority 97
 	] , [
@@ -4285,6 +4290,7 @@
 		lv2:minimum 0 ;
 		lv2:maximum 127 ;
 		lv2:portProperty lv2:integer ;
+		lv2:portProperty pprops:notAutomatic ;
 		pg:group <https://github.com/hjanetzek/mdt-lv2/edrumsynth#seq_step> ;
 		lv2:displayPriority 100
 	] , [
@@ -4297,6 +4303,7 @@
 		lv2:minimum 0 ;
 		lv2:maximum 127 ;
 		lv2:portProperty lv2:integer ;
+		lv2:portProperty pprops:notAutomatic ;
 		pg:group <https://github.com/hjanetzek/mdt-lv2/edrumsynth#seq_step> ;
 		lv2:displayPriority 99
 	] , [
@@ -4309,6 +4316,7 @@
 		lv2:minimum 0 ;
 		lv2:maximum 100 ;
 		lv2:portProperty lv2:integer ;
+		lv2:portProperty pprops:notAutomatic ;
 		pg:group <https://github.com/hjanetzek/mdt-lv2/edrumsynth#seq_step> ;
 		lv2:displayPriority 98
 	] , [
@@ -4322,6 +4330,7 @@
 		lv2:maximum 5 ;
 		lv2:portProperty lv2:integer , lv2:enumeration ;
 		lv2:scalePoint [ rdfs:label "Off" ; rdf:value 0 ] , [ rdfs:label "x2" ; rdf:value 1 ] , [ rdfs:label "x3" ; rdf:value 2 ] , [ rdfs:label "x4" ; rdf:value 3 ] , [ rdfs:label "x6" ; rdf:value 4 ] , [ rdfs:label "x8" ; rdf:value 5 ] ;
+		lv2:portProperty pprops:notAutomatic ;
 		pg:group <https://github.com/hjanetzek/mdt-lv2/edrumsynth#seq_step> ;
 		lv2:displayPriority 97
 	] , [
@@ -4334,6 +4343,7 @@
 		lv2:minimum -7 ;
 		lv2:maximum 7 ;
 		lv2:portProperty lv2:integer ;
+		lv2:portProperty pprops:notAutomatic ;
 		pg:group <https://github.com/hjanetzek/mdt-lv2/edrumsynth#seq_step> ;
 		lv2:displayPriority 96
 	] , [
@@ -4347,6 +4357,7 @@
 		lv2:maximum 228 ;
 		lv2:portProperty lv2:integer , lv2:enumeration ;
 		lv2:scalePoint [ rdfs:label "Off" ; rdf:value 0 ] , [ rdfs:label "All Sample Rate" ; rdf:value 1 ] , [ rdfs:label "BD Osc Coarse" ; rdf:value 2 ] , [ rdfs:label "BD Osc Fine" ; rdf:value 3 ] , [ rdfs:label "BD Osc Waveform" ; rdf:value 4 ] , [ rdfs:label "BD Osc Pulse Width" ; rdf:value 5 ] , [ rdfs:label "BD Amp EG Attack" ; rdf:value 6 ] , [ rdfs:label "BD Amp EG Decay" ; rdf:value 7 ] , [ rdfs:label "BD Amp EG Slope" ; rdf:value 8 ] , [ rdfs:label "BD Mod EG Decay / Mod Wave 2" ; rdf:value 9 ] , [ rdfs:label "BD Mod EG Slope / Mod Gain 2" ; rdf:value 10 ] , [ rdfs:label "BD Pitch Mod / Mod Freq 2" ; rdf:value 11 ] , [ rdfs:label "BD Velo Dest" ; rdf:value 12 ] , [ rdfs:label "BD Velo Amount" ; rdf:value 13 ] , [ rdfs:label "BD Velo Vol Mod" ; rdf:value 14 ] , [ rdfs:label "BD FM Amount / Noise Mix / Mod Gain 1" ; rdf:value 15 ] , [ rdfs:label "BD FM Freq / Noise Freq / Mod Freq 1" ; rdf:value 16 ] , [ rdfs:label "BD FM Wave / Mod Wave 1" ; rdf:value 17 ] , [ rdfs:label "BD FM Mode / Repeat" ; rdf:value 18 ] , [ rdfs:label "BD Transient Waveform" ; rdf:value 19 ] , [ rdfs:label "BD Transient Volume" ; rdf:value 20 ] , [ rdfs:label "BD Transient Frequency" ; rdf:value 21 ] , [ rdfs:label "BD Filter Cutoff" ; rdf:value 22 ] , [ rdfs:label "BD Filter Resonance" ; rdf:value 23 ] , [ rdfs:label "BD Filter Type" ; rdf:value 24 ] , [ rdfs:label "BD Filter Drive" ; rdf:value 25 ] , [ rdfs:label "BD LFO Frequency" ; rdf:value 26 ] , [ rdfs:label "BD LFO Clock Sync" ; rdf:value 27 ] , [ rdfs:label "BD LFO Amount" ; rdf:value 28 ] , [ rdfs:label "BD LFO Waveform" ; rdf:value 29 ] , [ rdfs:label "BD LFO Retrigger" ; rdf:value 30 ] , [ rdfs:label "BD LFO Offset" ; rdf:value 31 ] , [ rdfs:label "BD Mix Volume" ; rdf:value 32 ] , [ rdfs:label "BD Mix Pan" ; rdf:value 33 ] , [ rdfs:label "BD Mix Sample Rate" ; rdf:value 34 ] , [ rdfs:label "BD Mix Drive" ; rdf:value 35 ] , [ rdfs:label "BD FX Param 1" ; rdf:value 36 ] , [ rdfs:label "BD FX Param 2" ; rdf:value 37 ] , [ rdfs:label "BD FX Param 3" ; rdf:value 38 ] , [ rdfs:label "BD FX Param 4" ; rdf:value 39 ] , [ rdfs:label "T1 Osc Coarse" ; rdf:value 40 ] , [ rdfs:label "T1 Osc Fine" ; rdf:value 41 ] , [ rdfs:label "T1 Osc Waveform" ; rdf:value 42 ] , [ rdfs:label "T1 Osc Pulse Width" ; rdf:value 43 ] , [ rdfs:label "T1 Amp EG Attack" ; rdf:value 44 ] , [ rdfs:label "T1 Amp EG Decay" ; rdf:value 45 ] , [ rdfs:label "T1 Amp EG Slope" ; rdf:value 46 ] , [ rdfs:label "T1 Mod EG Decay / Mod Wave 2" ; rdf:value 47 ] , [ rdfs:label "T1 Mod EG Slope / Mod Gain 2" ; rdf:value 48 ] , [ rdfs:label "T1 Pitch Mod / Mod Freq 2" ; rdf:value 49 ] , [ rdfs:label "T1 Velo Dest" ; rdf:value 50 ] , [ rdfs:label "T1 Velo Amount" ; rdf:value 51 ] , [ rdfs:label "T1 Velo Vol Mod" ; rdf:value 52 ] , [ rdfs:label "T1 FM Amount / Noise Mix / Mod Gain 1" ; rdf:value 53 ] , [ rdfs:label "T1 FM Freq / Noise Freq / Mod Freq 1" ; rdf:value 54 ] , [ rdfs:label "T1 FM Wave / Mod Wave 1" ; rdf:value 55 ] , [ rdfs:label "T1 FM Mode / Repeat" ; rdf:value 56 ] , [ rdfs:label "T1 Transient Waveform" ; rdf:value 57 ] , [ rdfs:label "T1 Transient Volume" ; rdf:value 58 ] , [ rdfs:label "T1 Transient Frequency" ; rdf:value 59 ] , [ rdfs:label "T1 Filter Cutoff" ; rdf:value 60 ] , [ rdfs:label "T1 Filter Resonance" ; rdf:value 61 ] , [ rdfs:label "T1 Filter Type" ; rdf:value 62 ] , [ rdfs:label "T1 Filter Drive" ; rdf:value 63 ] , [ rdfs:label "T1 LFO Frequency" ; rdf:value 64 ] , [ rdfs:label "T1 LFO Clock Sync" ; rdf:value 65 ] , [ rdfs:label "T1 LFO Amount" ; rdf:value 66 ] , [ rdfs:label "T1 LFO Waveform" ; rdf:value 67 ] , [ rdfs:label "T1 LFO Retrigger" ; rdf:value 68 ] , [ rdfs:label "T1 LFO Offset" ; rdf:value 69 ] , [ rdfs:label "T1 Mix Volume" ; rdf:value 70 ] , [ rdfs:label "T1 Mix Pan" ; rdf:value 71 ] , [ rdfs:label "T1 Mix Sample Rate" ; rdf:value 72 ] , [ rdfs:label "T1 Mix Drive" ; rdf:value 73 ] , [ rdfs:label "T1 FX Param 1" ; rdf:value 74 ] , [ rdfs:label "T1 FX Param 2" ; rdf:value 75 ] , [ rdfs:label "T1 FX Param 3" ; rdf:value 76 ] , [ rdfs:label "T1 FX Param 4" ; rdf:value 77 ] , [ rdfs:label "T2 Osc Coarse" ; rdf:value 78 ] , [ rdfs:label "T2 Osc Fine" ; rdf:value 79 ] , [ rdfs:label "T2 Osc Waveform" ; rdf:value 80 ] , [ rdfs:label "T2 Osc Pulse Width" ; rdf:value 81 ] , [ rdfs:label "T2 Amp EG Attack" ; rdf:value 82 ] , [ rdfs:label "T2 Amp EG Decay" ; rdf:value 83 ] , [ rdfs:label "T2 Amp EG Slope" ; rdf:value 84 ] , [ rdfs:label "T2 Mod EG Decay / Mod Wave 2" ; rdf:value 85 ] , [ rdfs:label "T2 Mod EG Slope / Mod Gain 2" ; rdf:value 86 ] , [ rdfs:label "T2 Pitch Mod / Mod Freq 2" ; rdf:value 87 ] , [ rdfs:label "T2 Velo Dest" ; rdf:value 88 ] , [ rdfs:label "T2 Velo Amount" ; rdf:value 89 ] , [ rdfs:label "T2 Velo Vol Mod" ; rdf:value 90 ] , [ rdfs:label "T2 FM Amount / Noise Mix / Mod Gain 1" ; rdf:value 91 ] , [ rdfs:label "T2 FM Freq / Noise Freq / Mod Freq 1" ; rdf:value 92 ] , [ rdfs:label "T2 FM Wave / Mod Wave 1" ; rdf:value 93 ] , [ rdfs:label "T2 FM Mode / Repeat" ; rdf:value 94 ] , [ rdfs:label "T2 Transient Waveform" ; rdf:value 95 ] , [ rdfs:label "T2 Transient Volume" ; rdf:value 96 ] , [ rdfs:label "T2 Transient Frequency" ; rdf:value 97 ] , [ rdfs:label "T2 Filter Cutoff" ; rdf:value 98 ] , [ rdfs:label "T2 Filter Resonance" ; rdf:value 99 ] , [ rdfs:label "T2 Filter Type" ; rdf:value 100 ] , [ rdfs:label "T2 Filter Drive" ; rdf:value 101 ] , [ rdfs:label "T2 LFO Frequency" ; rdf:value 102 ] , [ rdfs:label "T2 LFO Clock Sync" ; rdf:value 103 ] , [ rdfs:label "T2 LFO Amount" ; rdf:value 104 ] , [ rdfs:label "T2 LFO Waveform" ; rdf:value 105 ] , [ rdfs:label "T2 LFO Retrigger" ; rdf:value 106 ] , [ rdfs:label "T2 LFO Offset" ; rdf:value 107 ] , [ rdfs:label "T2 Mix Volume" ; rdf:value 108 ] , [ rdfs:label "T2 Mix Pan" ; rdf:value 109 ] , [ rdfs:label "T2 Mix Sample Rate" ; rdf:value 110 ] , [ rdfs:label "T2 Mix Drive" ; rdf:value 111 ] , [ rdfs:label "T2 FX Param 1" ; rdf:value 112 ] , [ rdfs:label "T2 FX Param 2" ; rdf:value 113 ] , [ rdfs:label "T2 FX Param 3" ; rdf:value 114 ] , [ rdfs:label "T2 FX Param 4" ; rdf:value 115 ] , [ rdfs:label "SD Osc Coarse" ; rdf:value 116 ] , [ rdfs:label "SD Osc Fine" ; rdf:value 117 ] , [ rdfs:label "SD FM Freq / Noise Freq / Mod Freq 1" ; rdf:value 118 ] , [ rdfs:label "SD FM Amount / Noise Mix / Mod Gain 1" ; rdf:value 119 ] , [ rdfs:label "SD Osc Waveform" ; rdf:value 120 ] , [ rdfs:label "SD Osc Pulse Width" ; rdf:value 121 ] , [ rdfs:label "SD Amp EG Attack" ; rdf:value 122 ] , [ rdfs:label "SD Amp EG Decay" ; rdf:value 123 ] , [ rdfs:label "SD FM Mode / Repeat" ; rdf:value 124 ] , [ rdfs:label "SD Amp EG Slope" ; rdf:value 125 ] , [ rdfs:label "SD Mod EG Decay / Mod Wave 2" ; rdf:value 126 ] , [ rdfs:label "SD Mod EG Slope / Mod Gain 2" ; rdf:value 127 ] , [ rdfs:label "SD Pitch Mod / Mod Freq 2" ; rdf:value 128 ] , [ rdfs:label "SD Velo Dest" ; rdf:value 129 ] , [ rdfs:label "SD Velo Amount" ; rdf:value 130 ] , [ rdfs:label "SD Velo Vol Mod" ; rdf:value 131 ] , [ rdfs:label "SD Transient Waveform" ; rdf:value 132 ] , [ rdfs:label "SD Transient Volume" ; rdf:value 133 ] , [ rdfs:label "SD Transient Frequency" ; rdf:value 134 ] , [ rdfs:label "SD Filter Cutoff" ; rdf:value 135 ] , [ rdfs:label "SD Filter Resonance" ; rdf:value 136 ] , [ rdfs:label "SD Filter Type" ; rdf:value 137 ] , [ rdfs:label "SD Filter Drive" ; rdf:value 138 ] , [ rdfs:label "SD LFO Frequency" ; rdf:value 139 ] , [ rdfs:label "SD LFO Clock Sync" ; rdf:value 140 ] , [ rdfs:label "SD LFO Amount" ; rdf:value 141 ] , [ rdfs:label "SD LFO Waveform" ; rdf:value 142 ] , [ rdfs:label "SD LFO Retrigger" ; rdf:value 143 ] , [ rdfs:label "SD LFO Offset" ; rdf:value 144 ] , [ rdfs:label "SD Mix Volume" ; rdf:value 145 ] , [ rdfs:label "SD Mix Pan" ; rdf:value 146 ] , [ rdfs:label "SD Mix Sample Rate" ; rdf:value 147 ] , [ rdfs:label "SD Mix Drive" ; rdf:value 148 ] , [ rdfs:label "SD FX Param 1" ; rdf:value 149 ] , [ rdfs:label "SD FX Param 2" ; rdf:value 150 ] , [ rdfs:label "SD FX Param 3" ; rdf:value 151 ] , [ rdfs:label "SD FX Param 4" ; rdf:value 152 ] , [ rdfs:label "CY Osc Coarse" ; rdf:value 153 ] , [ rdfs:label "CY Osc Fine" ; rdf:value 154 ] , [ rdfs:label "CY Osc Waveform" ; rdf:value 155 ] , [ rdfs:label "CY Osc Pulse Width" ; rdf:value 156 ] , [ rdfs:label "CY Amp EG Attack" ; rdf:value 157 ] , [ rdfs:label "CY Amp EG Decay" ; rdf:value 158 ] , [ rdfs:label "CY FM Mode / Repeat" ; rdf:value 159 ] , [ rdfs:label "CY Amp EG Slope" ; rdf:value 160 ] , [ rdfs:label "CY Velo Dest" ; rdf:value 161 ] , [ rdfs:label "CY Velo Amount" ; rdf:value 162 ] , [ rdfs:label "CY Velo Vol Mod" ; rdf:value 163 ] , [ rdfs:label "CY FM Freq / Noise Freq / Mod Freq 1" ; rdf:value 164 ] , [ rdfs:label "CY Pitch Mod / Mod Freq 2" ; rdf:value 165 ] , [ rdfs:label "CY FM Amount / Noise Mix / Mod Gain 1" ; rdf:value 166 ] , [ rdfs:label "CY Mod EG Slope / Mod Gain 2" ; rdf:value 167 ] , [ rdfs:label "CY FM Wave / Mod Wave 1" ; rdf:value 168 ] , [ rdfs:label "CY Mod EG Decay / Mod Wave 2" ; rdf:value 169 ] , [ rdfs:label "CY Transient Waveform" ; rdf:value 170 ] , [ rdfs:label "CY Transient Volume" ; rdf:value 171 ] , [ rdfs:label "CY Transient Frequency" ; rdf:value 172 ] , [ rdfs:label "CY Filter Cutoff" ; rdf:value 173 ] , [ rdfs:label "CY Filter Resonance" ; rdf:value 174 ] , [ rdfs:label "CY Filter Type" ; rdf:value 175 ] , [ rdfs:label "CY Filter Drive" ; rdf:value 176 ] , [ rdfs:label "CY LFO Frequency" ; rdf:value 177 ] , [ rdfs:label "CY LFO Clock Sync" ; rdf:value 178 ] , [ rdfs:label "CY LFO Amount" ; rdf:value 179 ] , [ rdfs:label "CY LFO Waveform" ; rdf:value 180 ] , [ rdfs:label "CY LFO Retrigger" ; rdf:value 181 ] , [ rdfs:label "CY LFO Offset" ; rdf:value 182 ] , [ rdfs:label "CY Mix Volume" ; rdf:value 183 ] , [ rdfs:label "CY Mix Pan" ; rdf:value 184 ] , [ rdfs:label "CY Mix Sample Rate" ; rdf:value 185 ] , [ rdfs:label "CY Mix Drive" ; rdf:value 186 ] , [ rdfs:label "CY FX Param 1" ; rdf:value 187 ] , [ rdfs:label "CY FX Param 2" ; rdf:value 188 ] , [ rdfs:label "CY FX Param 3" ; rdf:value 189 ] , [ rdfs:label "CY FX Param 4" ; rdf:value 190 ] , [ rdfs:label "HH Osc Coarse" ; rdf:value 191 ] , [ rdfs:label "HH Osc Fine" ; rdf:value 192 ] , [ rdfs:label "HH Osc Waveform" ; rdf:value 193 ] , [ rdfs:label "HH Osc Pulse Width" ; rdf:value 194 ] , [ rdfs:label "HH Amp EG Attack" ; rdf:value 195 ] , [ rdfs:label "HH Amp EG Decay Closed" ; rdf:value 196 ] , [ rdfs:label "HH Amp EG Decay Open" ; rdf:value 197 ] , [ rdfs:label "HH Amp EG Slope" ; rdf:value 198 ] , [ rdfs:label "HH Velo Dest" ; rdf:value 199 ] , [ rdfs:label "HH Velo Amount" ; rdf:value 200 ] , [ rdfs:label "HH Velo Vol Mod" ; rdf:value 201 ] , [ rdfs:label "HH FM Freq / Noise Freq / Mod Freq 1" ; rdf:value 202 ] , [ rdfs:label "HH Pitch Mod / Mod Freq 2" ; rdf:value 203 ] , [ rdfs:label "HH FM Amount / Noise Mix / Mod Gain 1" ; rdf:value 204 ] , [ rdfs:label "HH Mod EG Slope / Mod Gain 2" ; rdf:value 205 ] , [ rdfs:label "HH FM Wave / Mod Wave 1" ; rdf:value 206 ] , [ rdfs:label "HH Mod EG Decay / Mod Wave 2" ; rdf:value 207 ] , [ rdfs:label "HH Transient Waveform" ; rdf:value 208 ] , [ rdfs:label "HH Transient Volume" ; rdf:value 209 ] , [ rdfs:label "HH Transient Frequency" ; rdf:value 210 ] , [ rdfs:label "HH Filter Cutoff" ; rdf:value 211 ] , [ rdfs:label "HH Filter Resonance" ; rdf:value 212 ] , [ rdfs:label "HH Filter Type" ; rdf:value 213 ] , [ rdfs:label "HH Filter Drive" ; rdf:value 214 ] , [ rdfs:label "HH LFO Frequency" ; rdf:value 215 ] , [ rdfs:label "HH LFO Clock Sync" ; rdf:value 216 ] , [ rdfs:label "HH LFO Amount" ; rdf:value 217 ] , [ rdfs:label "HH LFO Waveform" ; rdf:value 218 ] , [ rdfs:label "HH LFO Retrigger" ; rdf:value 219 ] , [ rdfs:label "HH LFO Offset" ; rdf:value 220 ] , [ rdfs:label "HH Mix Volume" ; rdf:value 221 ] , [ rdfs:label "HH Mix Pan" ; rdf:value 222 ] , [ rdfs:label "HH Mix Sample Rate" ; rdf:value 223 ] , [ rdfs:label "HH Mix Drive" ; rdf:value 224 ] , [ rdfs:label "HH FX Param 1" ; rdf:value 225 ] , [ rdfs:label "HH FX Param 2" ; rdf:value 226 ] , [ rdfs:label "HH FX Param 3" ; rdf:value 227 ] , [ rdfs:label "HH FX Param 4" ; rdf:value 228 ] ;
+		lv2:portProperty pprops:notAutomatic ;
 		pg:group <https://github.com/hjanetzek/mdt-lv2/edrumsynth#seq_locks> ;
 		lv2:displayPriority 100
 	] , [
@@ -4359,6 +4370,7 @@
 		lv2:minimum 0 ;
 		lv2:maximum 127 ;
 		lv2:portProperty lv2:integer ;
+		lv2:portProperty pprops:notAutomatic ;
 		pg:group <https://github.com/hjanetzek/mdt-lv2/edrumsynth#seq_locks> ;
 		lv2:displayPriority 99
 	] , [
@@ -4372,6 +4384,7 @@
 		lv2:maximum 228 ;
 		lv2:portProperty lv2:integer , lv2:enumeration ;
 		lv2:scalePoint [ rdfs:label "Off" ; rdf:value 0 ] , [ rdfs:label "All Sample Rate" ; rdf:value 1 ] , [ rdfs:label "BD Osc Coarse" ; rdf:value 2 ] , [ rdfs:label "BD Osc Fine" ; rdf:value 3 ] , [ rdfs:label "BD Osc Waveform" ; rdf:value 4 ] , [ rdfs:label "BD Osc Pulse Width" ; rdf:value 5 ] , [ rdfs:label "BD Amp EG Attack" ; rdf:value 6 ] , [ rdfs:label "BD Amp EG Decay" ; rdf:value 7 ] , [ rdfs:label "BD Amp EG Slope" ; rdf:value 8 ] , [ rdfs:label "BD Mod EG Decay / Mod Wave 2" ; rdf:value 9 ] , [ rdfs:label "BD Mod EG Slope / Mod Gain 2" ; rdf:value 10 ] , [ rdfs:label "BD Pitch Mod / Mod Freq 2" ; rdf:value 11 ] , [ rdfs:label "BD Velo Dest" ; rdf:value 12 ] , [ rdfs:label "BD Velo Amount" ; rdf:value 13 ] , [ rdfs:label "BD Velo Vol Mod" ; rdf:value 14 ] , [ rdfs:label "BD FM Amount / Noise Mix / Mod Gain 1" ; rdf:value 15 ] , [ rdfs:label "BD FM Freq / Noise Freq / Mod Freq 1" ; rdf:value 16 ] , [ rdfs:label "BD FM Wave / Mod Wave 1" ; rdf:value 17 ] , [ rdfs:label "BD FM Mode / Repeat" ; rdf:value 18 ] , [ rdfs:label "BD Transient Waveform" ; rdf:value 19 ] , [ rdfs:label "BD Transient Volume" ; rdf:value 20 ] , [ rdfs:label "BD Transient Frequency" ; rdf:value 21 ] , [ rdfs:label "BD Filter Cutoff" ; rdf:value 22 ] , [ rdfs:label "BD Filter Resonance" ; rdf:value 23 ] , [ rdfs:label "BD Filter Type" ; rdf:value 24 ] , [ rdfs:label "BD Filter Drive" ; rdf:value 25 ] , [ rdfs:label "BD LFO Frequency" ; rdf:value 26 ] , [ rdfs:label "BD LFO Clock Sync" ; rdf:value 27 ] , [ rdfs:label "BD LFO Amount" ; rdf:value 28 ] , [ rdfs:label "BD LFO Waveform" ; rdf:value 29 ] , [ rdfs:label "BD LFO Retrigger" ; rdf:value 30 ] , [ rdfs:label "BD LFO Offset" ; rdf:value 31 ] , [ rdfs:label "BD Mix Volume" ; rdf:value 32 ] , [ rdfs:label "BD Mix Pan" ; rdf:value 33 ] , [ rdfs:label "BD Mix Sample Rate" ; rdf:value 34 ] , [ rdfs:label "BD Mix Drive" ; rdf:value 35 ] , [ rdfs:label "BD FX Param 1" ; rdf:value 36 ] , [ rdfs:label "BD FX Param 2" ; rdf:value 37 ] , [ rdfs:label "BD FX Param 3" ; rdf:value 38 ] , [ rdfs:label "BD FX Param 4" ; rdf:value 39 ] , [ rdfs:label "T1 Osc Coarse" ; rdf:value 40 ] , [ rdfs:label "T1 Osc Fine" ; rdf:value 41 ] , [ rdfs:label "T1 Osc Waveform" ; rdf:value 42 ] , [ rdfs:label "T1 Osc Pulse Width" ; rdf:value 43 ] , [ rdfs:label "T1 Amp EG Attack" ; rdf:value 44 ] , [ rdfs:label "T1 Amp EG Decay" ; rdf:value 45 ] , [ rdfs:label "T1 Amp EG Slope" ; rdf:value 46 ] , [ rdfs:label "T1 Mod EG Decay / Mod Wave 2" ; rdf:value 47 ] , [ rdfs:label "T1 Mod EG Slope / Mod Gain 2" ; rdf:value 48 ] , [ rdfs:label "T1 Pitch Mod / Mod Freq 2" ; rdf:value 49 ] , [ rdfs:label "T1 Velo Dest" ; rdf:value 50 ] , [ rdfs:label "T1 Velo Amount" ; rdf:value 51 ] , [ rdfs:label "T1 Velo Vol Mod" ; rdf:value 52 ] , [ rdfs:label "T1 FM Amount / Noise Mix / Mod Gain 1" ; rdf:value 53 ] , [ rdfs:label "T1 FM Freq / Noise Freq / Mod Freq 1" ; rdf:value 54 ] , [ rdfs:label "T1 FM Wave / Mod Wave 1" ; rdf:value 55 ] , [ rdfs:label "T1 FM Mode / Repeat" ; rdf:value 56 ] , [ rdfs:label "T1 Transient Waveform" ; rdf:value 57 ] , [ rdfs:label "T1 Transient Volume" ; rdf:value 58 ] , [ rdfs:label "T1 Transient Frequency" ; rdf:value 59 ] , [ rdfs:label "T1 Filter Cutoff" ; rdf:value 60 ] , [ rdfs:label "T1 Filter Resonance" ; rdf:value 61 ] , [ rdfs:label "T1 Filter Type" ; rdf:value 62 ] , [ rdfs:label "T1 Filter Drive" ; rdf:value 63 ] , [ rdfs:label "T1 LFO Frequency" ; rdf:value 64 ] , [ rdfs:label "T1 LFO Clock Sync" ; rdf:value 65 ] , [ rdfs:label "T1 LFO Amount" ; rdf:value 66 ] , [ rdfs:label "T1 LFO Waveform" ; rdf:value 67 ] , [ rdfs:label "T1 LFO Retrigger" ; rdf:value 68 ] , [ rdfs:label "T1 LFO Offset" ; rdf:value 69 ] , [ rdfs:label "T1 Mix Volume" ; rdf:value 70 ] , [ rdfs:label "T1 Mix Pan" ; rdf:value 71 ] , [ rdfs:label "T1 Mix Sample Rate" ; rdf:value 72 ] , [ rdfs:label "T1 Mix Drive" ; rdf:value 73 ] , [ rdfs:label "T1 FX Param 1" ; rdf:value 74 ] , [ rdfs:label "T1 FX Param 2" ; rdf:value 75 ] , [ rdfs:label "T1 FX Param 3" ; rdf:value 76 ] , [ rdfs:label "T1 FX Param 4" ; rdf:value 77 ] , [ rdfs:label "T2 Osc Coarse" ; rdf:value 78 ] , [ rdfs:label "T2 Osc Fine" ; rdf:value 79 ] , [ rdfs:label "T2 Osc Waveform" ; rdf:value 80 ] , [ rdfs:label "T2 Osc Pulse Width" ; rdf:value 81 ] , [ rdfs:label "T2 Amp EG Attack" ; rdf:value 82 ] , [ rdfs:label "T2 Amp EG Decay" ; rdf:value 83 ] , [ rdfs:label "T2 Amp EG Slope" ; rdf:value 84 ] , [ rdfs:label "T2 Mod EG Decay / Mod Wave 2" ; rdf:value 85 ] , [ rdfs:label "T2 Mod EG Slope / Mod Gain 2" ; rdf:value 86 ] , [ rdfs:label "T2 Pitch Mod / Mod Freq 2" ; rdf:value 87 ] , [ rdfs:label "T2 Velo Dest" ; rdf:value 88 ] , [ rdfs:label "T2 Velo Amount" ; rdf:value 89 ] , [ rdfs:label "T2 Velo Vol Mod" ; rdf:value 90 ] , [ rdfs:label "T2 FM Amount / Noise Mix / Mod Gain 1" ; rdf:value 91 ] , [ rdfs:label "T2 FM Freq / Noise Freq / Mod Freq 1" ; rdf:value 92 ] , [ rdfs:label "T2 FM Wave / Mod Wave 1" ; rdf:value 93 ] , [ rdfs:label "T2 FM Mode / Repeat" ; rdf:value 94 ] , [ rdfs:label "T2 Transient Waveform" ; rdf:value 95 ] , [ rdfs:label "T2 Transient Volume" ; rdf:value 96 ] , [ rdfs:label "T2 Transient Frequency" ; rdf:value 97 ] , [ rdfs:label "T2 Filter Cutoff" ; rdf:value 98 ] , [ rdfs:label "T2 Filter Resonance" ; rdf:value 99 ] , [ rdfs:label "T2 Filter Type" ; rdf:value 100 ] , [ rdfs:label "T2 Filter Drive" ; rdf:value 101 ] , [ rdfs:label "T2 LFO Frequency" ; rdf:value 102 ] , [ rdfs:label "T2 LFO Clock Sync" ; rdf:value 103 ] , [ rdfs:label "T2 LFO Amount" ; rdf:value 104 ] , [ rdfs:label "T2 LFO Waveform" ; rdf:value 105 ] , [ rdfs:label "T2 LFO Retrigger" ; rdf:value 106 ] , [ rdfs:label "T2 LFO Offset" ; rdf:value 107 ] , [ rdfs:label "T2 Mix Volume" ; rdf:value 108 ] , [ rdfs:label "T2 Mix Pan" ; rdf:value 109 ] , [ rdfs:label "T2 Mix Sample Rate" ; rdf:value 110 ] , [ rdfs:label "T2 Mix Drive" ; rdf:value 111 ] , [ rdfs:label "T2 FX Param 1" ; rdf:value 112 ] , [ rdfs:label "T2 FX Param 2" ; rdf:value 113 ] , [ rdfs:label "T2 FX Param 3" ; rdf:value 114 ] , [ rdfs:label "T2 FX Param 4" ; rdf:value 115 ] , [ rdfs:label "SD Osc Coarse" ; rdf:value 116 ] , [ rdfs:label "SD Osc Fine" ; rdf:value 117 ] , [ rdfs:label "SD FM Freq / Noise Freq / Mod Freq 1" ; rdf:value 118 ] , [ rdfs:label "SD FM Amount / Noise Mix / Mod Gain 1" ; rdf:value 119 ] , [ rdfs:label "SD Osc Waveform" ; rdf:value 120 ] , [ rdfs:label "SD Osc Pulse Width" ; rdf:value 121 ] , [ rdfs:label "SD Amp EG Attack" ; rdf:value 122 ] , [ rdfs:label "SD Amp EG Decay" ; rdf:value 123 ] , [ rdfs:label "SD FM Mode / Repeat" ; rdf:value 124 ] , [ rdfs:label "SD Amp EG Slope" ; rdf:value 125 ] , [ rdfs:label "SD Mod EG Decay / Mod Wave 2" ; rdf:value 126 ] , [ rdfs:label "SD Mod EG Slope / Mod Gain 2" ; rdf:value 127 ] , [ rdfs:label "SD Pitch Mod / Mod Freq 2" ; rdf:value 128 ] , [ rdfs:label "SD Velo Dest" ; rdf:value 129 ] , [ rdfs:label "SD Velo Amount" ; rdf:value 130 ] , [ rdfs:label "SD Velo Vol Mod" ; rdf:value 131 ] , [ rdfs:label "SD Transient Waveform" ; rdf:value 132 ] , [ rdfs:label "SD Transient Volume" ; rdf:value 133 ] , [ rdfs:label "SD Transient Frequency" ; rdf:value 134 ] , [ rdfs:label "SD Filter Cutoff" ; rdf:value 135 ] , [ rdfs:label "SD Filter Resonance" ; rdf:value 136 ] , [ rdfs:label "SD Filter Type" ; rdf:value 137 ] , [ rdfs:label "SD Filter Drive" ; rdf:value 138 ] , [ rdfs:label "SD LFO Frequency" ; rdf:value 139 ] , [ rdfs:label "SD LFO Clock Sync" ; rdf:value 140 ] , [ rdfs:label "SD LFO Amount" ; rdf:value 141 ] , [ rdfs:label "SD LFO Waveform" ; rdf:value 142 ] , [ rdfs:label "SD LFO Retrigger" ; rdf:value 143 ] , [ rdfs:label "SD LFO Offset" ; rdf:value 144 ] , [ rdfs:label "SD Mix Volume" ; rdf:value 145 ] , [ rdfs:label "SD Mix Pan" ; rdf:value 146 ] , [ rdfs:label "SD Mix Sample Rate" ; rdf:value 147 ] , [ rdfs:label "SD Mix Drive" ; rdf:value 148 ] , [ rdfs:label "SD FX Param 1" ; rdf:value 149 ] , [ rdfs:label "SD FX Param 2" ; rdf:value 150 ] , [ rdfs:label "SD FX Param 3" ; rdf:value 151 ] , [ rdfs:label "SD FX Param 4" ; rdf:value 152 ] , [ rdfs:label "CY Osc Coarse" ; rdf:value 153 ] , [ rdfs:label "CY Osc Fine" ; rdf:value 154 ] , [ rdfs:label "CY Osc Waveform" ; rdf:value 155 ] , [ rdfs:label "CY Osc Pulse Width" ; rdf:value 156 ] , [ rdfs:label "CY Amp EG Attack" ; rdf:value 157 ] , [ rdfs:label "CY Amp EG Decay" ; rdf:value 158 ] , [ rdfs:label "CY FM Mode / Repeat" ; rdf:value 159 ] , [ rdfs:label "CY Amp EG Slope" ; rdf:value 160 ] , [ rdfs:label "CY Velo Dest" ; rdf:value 161 ] , [ rdfs:label "CY Velo Amount" ; rdf:value 162 ] , [ rdfs:label "CY Velo Vol Mod" ; rdf:value 163 ] , [ rdfs:label "CY FM Freq / Noise Freq / Mod Freq 1" ; rdf:value 164 ] , [ rdfs:label "CY Pitch Mod / Mod Freq 2" ; rdf:value 165 ] , [ rdfs:label "CY FM Amount / Noise Mix / Mod Gain 1" ; rdf:value 166 ] , [ rdfs:label "CY Mod EG Slope / Mod Gain 2" ; rdf:value 167 ] , [ rdfs:label "CY FM Wave / Mod Wave 1" ; rdf:value 168 ] , [ rdfs:label "CY Mod EG Decay / Mod Wave 2" ; rdf:value 169 ] , [ rdfs:label "CY Transient Waveform" ; rdf:value 170 ] , [ rdfs:label "CY Transient Volume" ; rdf:value 171 ] , [ rdfs:label "CY Transient Frequency" ; rdf:value 172 ] , [ rdfs:label "CY Filter Cutoff" ; rdf:value 173 ] , [ rdfs:label "CY Filter Resonance" ; rdf:value 174 ] , [ rdfs:label "CY Filter Type" ; rdf:value 175 ] , [ rdfs:label "CY Filter Drive" ; rdf:value 176 ] , [ rdfs:label "CY LFO Frequency" ; rdf:value 177 ] , [ rdfs:label "CY LFO Clock Sync" ; rdf:value 178 ] , [ rdfs:label "CY LFO Amount" ; rdf:value 179 ] , [ rdfs:label "CY LFO Waveform" ; rdf:value 180 ] , [ rdfs:label "CY LFO Retrigger" ; rdf:value 181 ] , [ rdfs:label "CY LFO Offset" ; rdf:value 182 ] , [ rdfs:label "CY Mix Volume" ; rdf:value 183 ] , [ rdfs:label "CY Mix Pan" ; rdf:value 184 ] , [ rdfs:label "CY Mix Sample Rate" ; rdf:value 185 ] , [ rdfs:label "CY Mix Drive" ; rdf:value 186 ] , [ rdfs:label "CY FX Param 1" ; rdf:value 187 ] , [ rdfs:label "CY FX Param 2" ; rdf:value 188 ] , [ rdfs:label "CY FX Param 3" ; rdf:value 189 ] , [ rdfs:label "CY FX Param 4" ; rdf:value 190 ] , [ rdfs:label "HH Osc Coarse" ; rdf:value 191 ] , [ rdfs:label "HH Osc Fine" ; rdf:value 192 ] , [ rdfs:label "HH Osc Waveform" ; rdf:value 193 ] , [ rdfs:label "HH Osc Pulse Width" ; rdf:value 194 ] , [ rdfs:label "HH Amp EG Attack" ; rdf:value 195 ] , [ rdfs:label "HH Amp EG Decay Closed" ; rdf:value 196 ] , [ rdfs:label "HH Amp EG Decay Open" ; rdf:value 197 ] , [ rdfs:label "HH Amp EG Slope" ; rdf:value 198 ] , [ rdfs:label "HH Velo Dest" ; rdf:value 199 ] , [ rdfs:label "HH Velo Amount" ; rdf:value 200 ] , [ rdfs:label "HH Velo Vol Mod" ; rdf:value 201 ] , [ rdfs:label "HH FM Freq / Noise Freq / Mod Freq 1" ; rdf:value 202 ] , [ rdfs:label "HH Pitch Mod / Mod Freq 2" ; rdf:value 203 ] , [ rdfs:label "HH FM Amount / Noise Mix / Mod Gain 1" ; rdf:value 204 ] , [ rdfs:label "HH Mod EG Slope / Mod Gain 2" ; rdf:value 205 ] , [ rdfs:label "HH FM Wave / Mod Wave 1" ; rdf:value 206 ] , [ rdfs:label "HH Mod EG Decay / Mod Wave 2" ; rdf:value 207 ] , [ rdfs:label "HH Transient Waveform" ; rdf:value 208 ] , [ rdfs:label "HH Transient Volume" ; rdf:value 209 ] , [ rdfs:label "HH Transient Frequency" ; rdf:value 210 ] , [ rdfs:label "HH Filter Cutoff" ; rdf:value 211 ] , [ rdfs:label "HH Filter Resonance" ; rdf:value 212 ] , [ rdfs:label "HH Filter Type" ; rdf:value 213 ] , [ rdfs:label "HH Filter Drive" ; rdf:value 214 ] , [ rdfs:label "HH LFO Frequency" ; rdf:value 215 ] , [ rdfs:label "HH LFO Clock Sync" ; rdf:value 216 ] , [ rdfs:label "HH LFO Amount" ; rdf:value 217 ] , [ rdfs:label "HH LFO Waveform" ; rdf:value 218 ] , [ rdfs:label "HH LFO Retrigger" ; rdf:value 219 ] , [ rdfs:label "HH LFO Offset" ; rdf:value 220 ] , [ rdfs:label "HH Mix Volume" ; rdf:value 221 ] , [ rdfs:label "HH Mix Pan" ; rdf:value 222 ] , [ rdfs:label "HH Mix Sample Rate" ; rdf:value 223 ] , [ rdfs:label "HH Mix Drive" ; rdf:value 224 ] , [ rdfs:label "HH FX Param 1" ; rdf:value 225 ] , [ rdfs:label "HH FX Param 2" ; rdf:value 226 ] , [ rdfs:label "HH FX Param 3" ; rdf:value 227 ] , [ rdfs:label "HH FX Param 4" ; rdf:value 228 ] ;
+		lv2:portProperty pprops:notAutomatic ;
 		pg:group <https://github.com/hjanetzek/mdt-lv2/edrumsynth#seq_locks> ;
 		lv2:displayPriority 98
 	] , [
@@ -4384,6 +4397,7 @@
 		lv2:minimum 0 ;
 		lv2:maximum 127 ;
 		lv2:portProperty lv2:integer ;
+		lv2:portProperty pprops:notAutomatic ;
 		pg:group <https://github.com/hjanetzek/mdt-lv2/edrumsynth#seq_locks> ;
 		lv2:displayPriority 97
 	] , [
@@ -4396,6 +4410,7 @@
 		lv2:minimum 1 ;
 		lv2:maximum 64 ;
 		lv2:portProperty lv2:integer ;
+		lv2:portProperty pprops:notAutomatic ;
 		pg:group <https://github.com/hjanetzek/mdt-lv2/edrumsynth#seq_track> ;
 		lv2:displayPriority 100
 	] , [
@@ -4408,6 +4423,7 @@
 		lv2:minimum 1 ;
 		lv2:maximum 64 ;
 		lv2:portProperty lv2:integer ;
+		lv2:portProperty pprops:notAutomatic ;
 		pg:group <https://github.com/hjanetzek/mdt-lv2/edrumsynth#seq_track> ;
 		lv2:displayPriority 99
 	] , [
@@ -4420,6 +4436,7 @@
 		lv2:minimum 0 ;
 		lv2:maximum 63 ;
 		lv2:portProperty lv2:integer ;
+		lv2:portProperty pprops:notAutomatic ;
 		pg:group <https://github.com/hjanetzek/mdt-lv2/edrumsynth#seq_track> ;
 		lv2:displayPriority 98
 	] , [
@@ -4432,6 +4449,7 @@
 		lv2:minimum 0 ;
 		lv2:maximum 1 ;
 		lv2:portProperty lv2:toggled , pprops:trigger ;
+		lv2:portProperty pprops:notAutomatic ;
 		pg:group <https://github.com/hjanetzek/mdt-lv2/edrumsynth#seq_track> ;
 		lv2:displayPriority 97
 	] , [
@@ -4521,6 +4539,7 @@
 		lv2:minimum 0 ;
 		lv2:maximum 1 ;
 		lv2:portProperty lv2:toggled , pprops:trigger ;
+		lv2:portProperty pprops:notAutomatic ;
 		pg:group <https://github.com/hjanetzek/mdt-lv2/edrumsynth#seq_buttons> ;
 		lv2:displayPriority 100
 	] , [
@@ -4532,6 +4551,7 @@
 		lv2:minimum 0 ;
 		lv2:maximum 1 ;
 		lv2:portProperty lv2:toggled , pprops:trigger ;
+		lv2:portProperty pprops:notAutomatic ;
 		pg:group <https://github.com/hjanetzek/mdt-lv2/edrumsynth#seq_buttons> ;
 		lv2:displayPriority 99
 	] , [
@@ -4543,6 +4563,7 @@
 		lv2:minimum 0 ;
 		lv2:maximum 1 ;
 		lv2:portProperty lv2:toggled , pprops:trigger ;
+		lv2:portProperty pprops:notAutomatic ;
 		pg:group <https://github.com/hjanetzek/mdt-lv2/edrumsynth#seq_buttons> ;
 		lv2:displayPriority 98
 	] , [
@@ -4554,6 +4575,7 @@
 		lv2:minimum 0 ;
 		lv2:maximum 1 ;
 		lv2:portProperty lv2:toggled , pprops:trigger ;
+		lv2:portProperty pprops:notAutomatic ;
 		pg:group <https://github.com/hjanetzek/mdt-lv2/edrumsynth#seq_buttons> ;
 		lv2:displayPriority 97
 	] , [
@@ -4565,6 +4587,7 @@
 		lv2:minimum 0 ;
 		lv2:maximum 1 ;
 		lv2:portProperty lv2:toggled , pprops:trigger ;
+		lv2:portProperty pprops:notAutomatic ;
 		pg:group <https://github.com/hjanetzek/mdt-lv2/edrumsynth#seq_buttons> ;
 		lv2:displayPriority 96
 	] , [
@@ -4576,6 +4599,7 @@
 		lv2:minimum 0 ;
 		lv2:maximum 1 ;
 		lv2:portProperty lv2:toggled , pprops:trigger ;
+		lv2:portProperty pprops:notAutomatic ;
 		pg:group <https://github.com/hjanetzek/mdt-lv2/edrumsynth#seq_buttons> ;
 		lv2:displayPriority 95
 	] , [
@@ -4587,6 +4611,7 @@
 		lv2:minimum 0 ;
 		lv2:maximum 1 ;
 		lv2:portProperty lv2:toggled , pprops:trigger ;
+		lv2:portProperty pprops:notAutomatic ;
 		pg:group <https://github.com/hjanetzek/mdt-lv2/edrumsynth#seq_buttons> ;
 		lv2:displayPriority 94
 	] , [
@@ -4598,6 +4623,7 @@
 		lv2:minimum 0 ;
 		lv2:maximum 1 ;
 		lv2:portProperty lv2:toggled , pprops:trigger ;
+		lv2:portProperty pprops:notAutomatic ;
 		pg:group <https://github.com/hjanetzek/mdt-lv2/edrumsynth#seq_buttons> ;
 		lv2:displayPriority 93
 	] , [
@@ -4609,6 +4635,7 @@
 		lv2:minimum 0 ;
 		lv2:maximum 1 ;
 		lv2:portProperty lv2:toggled , pprops:trigger ;
+		lv2:portProperty pprops:notAutomatic ;
 		pg:group <https://github.com/hjanetzek/mdt-lv2/edrumsynth#seq_buttons> ;
 		lv2:displayPriority 92
 	] , [
@@ -4620,6 +4647,7 @@
 		lv2:minimum 0 ;
 		lv2:maximum 1 ;
 		lv2:portProperty lv2:toggled , pprops:trigger ;
+		lv2:portProperty pprops:notAutomatic ;
 		pg:group <https://github.com/hjanetzek/mdt-lv2/edrumsynth#seq_buttons> ;
 		lv2:displayPriority 91
 	] , [
@@ -4631,6 +4659,7 @@
 		lv2:minimum 0 ;
 		lv2:maximum 1 ;
 		lv2:portProperty lv2:toggled , pprops:trigger ;
+		lv2:portProperty pprops:notAutomatic ;
 		pg:group <https://github.com/hjanetzek/mdt-lv2/edrumsynth#seq_buttons> ;
 		lv2:displayPriority 90
 	] , [
@@ -4642,6 +4671,7 @@
 		lv2:minimum 0 ;
 		lv2:maximum 1 ;
 		lv2:portProperty lv2:toggled , pprops:trigger ;
+		lv2:portProperty pprops:notAutomatic ;
 		pg:group <https://github.com/hjanetzek/mdt-lv2/edrumsynth#seq_buttons> ;
 		lv2:displayPriority 89
 	] , [
@@ -4653,6 +4683,7 @@
 		lv2:minimum 0 ;
 		lv2:maximum 1 ;
 		lv2:portProperty lv2:toggled , pprops:trigger ;
+		lv2:portProperty pprops:notAutomatic ;
 		pg:group <https://github.com/hjanetzek/mdt-lv2/edrumsynth#seq_buttons> ;
 		lv2:displayPriority 88
 	] , [
@@ -4664,6 +4695,7 @@
 		lv2:minimum 0 ;
 		lv2:maximum 1 ;
 		lv2:portProperty lv2:toggled , pprops:trigger ;
+		lv2:portProperty pprops:notAutomatic ;
 		pg:group <https://github.com/hjanetzek/mdt-lv2/edrumsynth#seq_buttons> ;
 		lv2:displayPriority 87
 	] , [
@@ -4675,6 +4707,7 @@
 		lv2:minimum 0 ;
 		lv2:maximum 1 ;
 		lv2:portProperty lv2:toggled , pprops:trigger ;
+		lv2:portProperty pprops:notAutomatic ;
 		pg:group <https://github.com/hjanetzek/mdt-lv2/edrumsynth#seq_buttons> ;
 		lv2:displayPriority 86
 	] , [
@@ -4686,6 +4719,7 @@
 		lv2:minimum 0 ;
 		lv2:maximum 1 ;
 		lv2:portProperty lv2:toggled , pprops:trigger ;
+		lv2:portProperty pprops:notAutomatic ;
 		pg:group <https://github.com/hjanetzek/mdt-lv2/edrumsynth#seq_buttons> ;
 		lv2:displayPriority 85
 	] , [
@@ -4698,6 +4732,7 @@
 		lv2:minimum 0 ;
 		lv2:maximum 64 ;
 		lv2:portProperty lv2:integer ;
+		lv2:portProperty pprops:notAutomatic ;
 		pg:group <https://github.com/hjanetzek/mdt-lv2/edrumsynth#seq_actions> ;
 		lv2:displayPriority 100
 	] , [
@@ -4710,6 +4745,7 @@
 		lv2:minimum 0 ;
 		lv2:maximum 1 ;
 		lv2:portProperty lv2:toggled , pprops:trigger ;
+		lv2:portProperty pprops:notAutomatic ;
 		pg:group <https://github.com/hjanetzek/mdt-lv2/edrumsynth#seq_actions> ;
 		lv2:displayPriority 99
 	] , [
@@ -4722,6 +4758,7 @@
 		lv2:minimum 0 ;
 		lv2:maximum 1 ;
 		lv2:portProperty lv2:toggled , pprops:trigger ;
+		lv2:portProperty pprops:notAutomatic ;
 		pg:group <https://github.com/hjanetzek/mdt-lv2/edrumsynth#seq_actions> ;
 		lv2:displayPriority 98
 	] , [
@@ -4734,6 +4771,7 @@
 		lv2:minimum 0 ;
 		lv2:maximum 1 ;
 		lv2:portProperty lv2:toggled , pprops:trigger ;
+		lv2:portProperty pprops:notAutomatic ;
 		pg:group <https://github.com/hjanetzek/mdt-lv2/edrumsynth#seq_actions> ;
 		lv2:displayPriority 97
 	] , [
@@ -4746,6 +4784,7 @@
 		lv2:minimum 0 ;
 		lv2:maximum 1 ;
 		lv2:portProperty lv2:toggled , pprops:trigger ;
+		lv2:portProperty pprops:notAutomatic ;
 		pg:group <https://github.com/hjanetzek/mdt-lv2/edrumsynth#seq_actions> ;
 		lv2:displayPriority 96
 	] , [
@@ -4758,6 +4797,7 @@
 		lv2:minimum 0 ;
 		lv2:maximum 1 ;
 		lv2:portProperty lv2:toggled , pprops:trigger ;
+		lv2:portProperty pprops:notAutomatic ;
 		pg:group <https://github.com/hjanetzek/mdt-lv2/edrumsynth#seq_actions> ;
 		lv2:displayPriority 95
 	] , [

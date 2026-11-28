@@ -7,7 +7,7 @@
 # to this file, until lv2/ is published; then a download of its archive at a
 # commit (_commit, as artyfx-lv2). No ARM flags here: they come from the build.
 pkgname=edrumsynth-lv2
-pkgver=0.3.0
+pkgver=0.3.1
 pkgrel=0
 pkgdesc="eDrumSynth: synthesized drums (MicroDexed-touch's drum engine) as an LV2 instrument"
 url="https://github.com/hjanetzek/mdt-lv2"
@@ -36,5 +36,5 @@ package() {
 }
 # from tools/mktarball.sh (or abuild checksum)
 sha512sums="
-00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000  edrumsynth-0.3.0.tar.gz
+00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000  edrumsynth-0.3.1.tar.gz
 "

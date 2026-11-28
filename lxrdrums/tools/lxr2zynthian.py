@@ -322,6 +322,11 @@ def kit_controls(m, kit, mode="multi", fold=None):
         else:
             v = p["default"]
         controls[s] = float(v) if p["kind"] == "float" else int(v)
+    # the plugin's own sequencer off (0.3.0 and later): zynseq plays the
+    # patterns here; in Host mode it would follow the transport too
+    for p in m.get("panel_ports", []):
+        if p["symbol"] == "seq_mode":
+            controls["seq_mode"] = 0
     ports = m.get("by_symbol") or {p["symbol"]: p for p in m["ports"]}
     for slot, k in (fold or {}).items():
         for s in fold_symbols(m, kit, slot):

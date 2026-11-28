@@ -56,7 +56,7 @@
 #define BINARY		"edrumsynth.so"
 #define TTL		"edrumsynth.ttl"
 #define MINOR_VERSION	3
-#define MICRO_VERSION	0
+#define MICRO_VERSION	1
 
 #define MAX_PORTS	400
 #define MAX_GROUPS	96
@@ -1030,6 +1030,28 @@ static void collectPanel (void)
 	}
 }
 
+// inputs that select or edit the project (selection, the selected step's
+// fields, locks, track length / Euclid, step buttons, actions, the edited
+// pattern's shuffle): pprops:notAutomatic, so hosts (Zynthian's snapshots and
+// ZS3s) don't save and restore them: restoring them after the preset's state
+// would write their stored values into whatever is selected. The settings
+// (mode, play, tempo, pattern, song, kit autoload, mutes) stay saved.
+static int panelNotSaved (const PanelPort *p)
+{
+	switch (p->group)
+	{
+	case PG_SELECT:
+	case PG_STEP:
+	case PG_LOCKS:
+	case PG_TRACK:
+	case PG_BUTTONS:
+	case PG_ACTIONS:
+		return 1;
+	default:
+		return !strcmp (p->sym, "seq_shuffle");
+	}
+}
+
 static int panelOutput (const PanelPort *p)
 {
 	return panelGroups[p->group].output;
@@ -1104,6 +1126,10 @@ static void writePanelPort (FILE *f, const PanelPort *p, int index, int prio)
 		break;
 	default:
 		break;
+	}
+	if (!output && panelNotSaved (p))
+	{
+		fprintf (f, " ;\n\t\tlv2:portProperty pprops:notAutomatic");
 	}
 	fprintf (f, " ;\n\t\tpg:group <" URI "#%s> ;\n\t\tlv2:displayPriority %d\n\t]", panelGroups[p->group].sym, prio);
 }
@@ -1633,7 +1659,7 @@ static void writePortsJson (FILE *f)
 			 panelGroups[p->group].sym, panelOutput (p) ? "output" : "input", kinds[p->kind], p->min, p->max);
 		if (!panelOutput (p))
 		{
-			fprintf (f, ", \"default\": %g", p->def);
+			fprintf (f, ", \"default\": %g, \"saved\": %s", p->def, panelNotSaved (p) ? "false" : "true");
 		}
 		fprintf (f, " }%s\n", i < numPanel - 1 ? "," : "");
 	}

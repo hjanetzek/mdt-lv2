@@ -352,7 +352,11 @@ class MappingTest(Base):
             self.assertEqual(ctl["t2_mix_engine"], 1)
             self.assertEqual(ctl["master_midi_mode"], 1)
             self.assertIsNone(zs3[k]["processors"]["1"]["preset_info"])
-        self.assertEqual(len(zs3["*/1"]["processors"]["1"]["controllers"]), len(PORTS["ports"]))
+        ctl = zs3["*/1"]["processors"]["1"]["controllers"]
+        # every plugin control, plus the panel's seq_mode (the plugin's
+        # sequencer off: zynseq plays the patterns)
+        self.assertEqual(len(ctl), len(PORTS["ports"]) + 1)
+        self.assertEqual(ctl["seq_mode"]["value"], 0)
         self.assertEqual(zs3["*/1"]["processors"]["1"]["controllers"]["bd_ampeg_decay"]["value"], 21)
         for k in zs3:
             self.assertEqual(zs3[k]["chains"]["1"]["audio_out"], [0])

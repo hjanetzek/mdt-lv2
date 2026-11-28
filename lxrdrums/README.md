@@ -1,8 +1,9 @@
 # eDrumSynth
 
-Version 0.3.0 (the LXR's own step sequencer in the plugin; v2.1: the "LXR
+Version 0.3.1 (the LXR's own step sequencer in the plugin; v2.1: the "LXR
 CC" switch; v2: engines per voice slot, MIDI modes, kit presets and the kit
-converter; changes: [Changes in 0.3.0](#changes-in-030), [Changes in
+converter; changes: [Changes in 0.3.1](#changes-in-031), [Changes in
+0.3.0](#changes-in-030), [Changes in
 0.2.0](#changes-in-020), [Changes in 0.1.0](#changes-in-010)). The
 sequencer, its panel ports and its state: [The sequencer](#the-sequencer);
 LXR projects as presets the plugin plays: [LXR projects as
@@ -487,6 +488,19 @@ The tests don't run jalv or anything that creates a JACK client.
 `edrumsynth-VERSION.tar.gz` (HEAD, or the working tree; `lxrdrums/` and
 `common/`) and its sha512sum line; `packaging/APKBUILD` is the draft recipe for nura-builds
 (`aports/lv2/edrumsynth-lv2/`, `arch="all"`, CMake, ctest in `check()`).
+
+## Changes in 0.3.1
+
+- The panel's edit ports (selection, the selected step's fields, locks,
+  track length and Euclid, step buttons, actions, the edited pattern's
+  shuffle; 40 ports) are `pprops:notAutomatic`, so hosts don't save and
+  restore them: Zynthian's snapshots and ZS3s (zynthian-ui honours the
+  property) would otherwise write their stored values into whatever is
+  selected after the preset's state. The settings (mode, play, tempo,
+  pattern, song, kit autoload, mutes) stay saved. The port map marks them
+  `"saved": false`; `lxr2preset.py` stores only the saved ones.
+- `lxr2zynthian.py`'s snapshots switch the plugin's own sequencer off
+  (`seq_mode` Off): zynseq plays the patterns there.
 
 ## Changes in 0.3.0
 
