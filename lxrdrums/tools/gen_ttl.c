@@ -35,6 +35,7 @@
  * SPDX-License-Identifier: GPL-3.0-only
  */
 #include "lxr_engine.h"
+#include "lxr_sequencer.h"
 #include "ttl.h"	// common/
 
 // the engine's modulation target table (index -> parameter), for the labels
@@ -1196,6 +1197,11 @@ static void writePlugin (FILE *f)
 			ttl_group (f, URI, panelGroups[g].sym, panelGroups[g].name, NULL, NUM_PANEL_GROUPS - g);
 	}
 
+	// the state's property (the sequencer's project)
+	fprintf (f, "<" URI "#project>\n\ta rdf:Property ;\n\trdfs:label \"Project\" ;\n"
+		    "\trdfs:comment \"the sequencer's project: patterns, kits, songs and globals of an LXR project "
+		    "(engine/Synth_LXR/src/lxr_sequencer.c: the layout), saved and restored with the plugin's state\" ;\n"
+		    "\trdfs:range atom:Chunk .\n\n");
 	fprintf (f,
 		 "<" URI ">\n"
 		 "\ta lv2:Plugin , lv2:InstrumentPlugin , doap:Project ;\n"
@@ -1591,9 +1597,33 @@ static void writePortsJson (FILE *f)
 			fprintf (f, ", \"kit_init\": %u", init[p->param]);
 		fprintf (f, " }%s\n", i < numPorts - 1 ? "," : "");
 	}
+	// the sequencer's project (the LV2 state's chunk: lxr_sequencer.c): the
+	// sizes, an empty project's globals (GLO.CFG's layout)
+	{
+		lxr_project *p = lxr_seq_project_new ();
+		uint8_t chunk[256];
+		const size_t n = p ? lxr_seq_chunk_write (p, chunk, sizeof chunk) : 0;
+		if (n < 48 || n != 48u + chunk[35])
+		{
+			fprintf (stderr, "gen_ttl: an empty project's chunk: %zu bytes\n", n);
+			exit (1);
+		}
+		fprintf (f, "\t],\n\t\"project\": { \"property\": \"" URI "#project\", \"type\": \"atom:Chunk\", \"magic\": \"%.4s\", "
+			    "\"version\": %u, \"header\": %u, \"pattern_file\": %d, \"kit_file\": %d, \"song_file\": %d, "
+			    "\"no_kit\": %d, \"globals\": [",
+			 (const char *) chunk, chunk[4] | chunk[5] << 8, chunk[6] | chunk[7] << 8, LXR_SEQ_PATTERN_FILE,
+			 LXR_SEQ_KIT_FILE, LXR_SEQ_SONG_FILE, LXR_SEQ_NO_KIT);
+		for (int i = 0; i < chunk[35]; i++)
+		{
+			fprintf (f, "%s%u", i ? ", " : "", chunk[48 + i]);
+		}
+		fprintf (f, "] }");
+		lxr_seq_project_free (p);
+	}
+
 	// the sequencer's panel
 	static const char *const kinds[] = { "integer", "toggle", "trigger", "enum", "float" };
-	fprintf (f, "\t],\n\t\"panel_ports\": [\n");
+	fprintf (f, ",\n\t\"panel_ports\": [\n");
 	for (int i = 0; i < numPanel; i++)
 	{
 		const PanelPort *p = &panel[i];

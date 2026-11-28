@@ -1664,9 +1664,332 @@ int main (int argc, char **argv)
 	return th_failures ? 1 : 0;
 }
 
+// ---- converted LXR projects ----
+
+static void writeFile (const char *path, const void *data, size_t size)
+{
+	FILE *f = fopen (path, "wb");
+	if (!f || fwrite (data, 1, size, f) != size)
+	{
+		perror (path);
+		exit (2);
+	}
+	fclose (f);
+}
+
+static uint8_t *readFile (const char *path, size_t *size)
+{
+	FILE *f = fopen (path, "rb");
+	if (!f)
+	{
+		return NULL;
+	}
+	fseek (f, 0, SEEK_END);
+	const long n = ftell (f);
+	fseek (f, 0, SEEK_SET);
+	uint8_t *data = malloc ((size_t) n + 1);
+	*size = fread (data, 1, (size_t) n, f);
+	data[*size] = 0;
+	fclose (f);
+	return data;
+}
+
+// a pattern file of the given version from a V3 one
+static size_t patternVersion (const uint8_t *v3, int version, const char *name, uint8_t *out)
+{
+	size_t n = 0;
+	memset (out, 0, 8);
+	memcpy (out, name, strlen (name) < 8 ? strlen (name) : 8);
+	n = 8;
+	if (version > 1)
+	{
+		memcpy (out + n, version == 3 ? "PatV03" : "PatV02", 6);
+		n += 6;
+	}
+	const uint8_t *o = v3 + 14;
+	for (int t = 0; t < 7; t++)
+	{
+		memcpy (out + n, o, 64 * 7);
+		n += 64 * 7;
+		o += 64 * 7;
+		if (version > 2)
+		{
+			memcpy (out + n, o, 64);
+			n += 64;
+		}
+		o += 64;
+	}
+	memcpy (out + n, o, 56 + 1 + 7);
+	n += 64;
+	o += 64;
+	if (version > 1)
+	{
+		out[n++] = *o;
+	}
+	return n;
+}
+
+static int b64 (int c)
+{
+	return c >= 'A' && c <= 'Z' ? c - 'A' : c >= 'a' && c <= 'z' ? c - 'a' + 26 : c >= '0' && c <= '9' ? c - '0' + 52
+	       : c == '+' ? 62 : c == '/' ? 63 : -1;
+}
+
+// a preset file: the port values and the project chunk (base64)
+typedef struct
+{
+	char symbol[512][48];
+	float value[512];
+	int n;
+	uint8_t *chunk;
+	size_t size;
+} PresetFile;
+
+static int parsePreset (const char *path, PresetFile *pf)
+{
+	size_t size;
+	char *text = (char *) readFile (path, &size);
+	if (!text)
+	{
+		return 0;
+	}
+	pf->n = 0;
+	for (char *p = text; (p = strstr (p, "lv2:symbol \"")) && pf->n < 512; p++)
+	{
+		float v;
+		char sym[48];
+		if (sscanf (p, "lv2:symbol \"%47[a-z0-9_]\" ; pset:value %f", sym, &v) == 2
+		    || sscanf (p, "lv2:symbol \"%47[a-z0-9_]\" ;\n\t\tpset:value %f", sym, &v) == 2)
+		{
+			snprintf (pf->symbol[pf->n], sizeof pf->symbol[0], "%s", sym);
+			pf->value[pf->n++] = v;
+		}
+	}
+	char *end = strstr (text, "\"^^xsd:base64Binary");
+	char *start = end;
+	while (start && start > text && start[-1] != '"')
+		start--;
+	if (!end || start == text)
+	{
+		free (text);
+		return 0;
+	}
+	pf->chunk = malloc ((size_t) (end - start));
+	pf->size = 0;
+	unsigned acc = 0;
+	int bits = 0;
+	for (char *c = start; c < end; c++)
+	{
+		const int x = b64 (*c);
+		if (x < 0)
+			continue;
+		acc = acc << 6 | (unsigned) x;
+		bits += 6;
+		if (bits >= 8)
+		{
+			bits -= 8;
+			pf->chunk[pf->size++] = (uint8_t) (acc >> bits);
+		}
+	}
+	free (text);
+	return 1;
+}
+
+static char projectDir[2048];
+
+// the synthetic project: pattern 0 (V3: steps on five tracks, a flam, a
+// shift, locks, a short track, shuffle; kit 1), 1 (V2, kit 2), 2 (V1, its
+// kit 0: no such file), song 0: 0 1 2 1 loop, kits 1 (engine block), 2
+// (engines changed), 3 (an older 255 byte kit); GLO.CFG 110 bpm; PRJ.NFO
+static void writeProject (const char *dir)
+{
+	makeKits ();
+	lxr_engine_init ();
+	const int coarse = targetOf (8);
+	static const StepDef steps[] = {
+		{ 0, 0, 0, 127, 0, 0, 0, 0, 0, 0 }, { 0, 0, 6, 110, 0, 0, 0, 0, 0, 0 }, { 0, 0, 8, 120, 0, 0, 0, 0, 0, 0 },
+		{ 0, 3, 4, 100, 0, 0, 0, 0, 0, 0 }, { 0, 3, 12, 100, 63, 0, 2, 0, 0, 0 }, { 0, 5, 0, 70, 0, 0, 0, 0, 0, 0 },
+		{ 0, 5, 2, 50, 0, 0, 0, 0, 0, 0 }, { 0, 5, 3, 50, 0, 0, 0, -2, 0, 0 }, { 0, 1, 10, 90, 0, 0, 0, 0, 0, 0 },
+		{ 0, 2, 0, 90, 0, 0, 0, 0, 0, 0 }, { 0, 2, 3, 90, 0, 0, 0, 0, 0, 0 },
+		{ 1, 0, 0, 127, 0, 0, 0, 0, 0, 0 }, { 1, 4, 4, 100, 0, 0, 0, 0, 0, 0 }, { 1, 6, 14, 100, 0, 0, 0, 0, 0, 0 },
+		{ 2, 3, 0, 100, 0, 0, 0, 0, 0, 0 }, { 2, 3, 8, 100, 0, 0, 0, 0, 0, 0 },
+	};
+	putSteps (steps, NELEM (steps));
+	lxr_seq_select (0, 0, 6);
+	lxr_seq_set_step_field (LXR_STEP_LOCK1_TARGET, (uint8_t) coarse);
+	lxr_seq_set_step_field (LXR_STEP_LOCK1_VALUE, 80);
+	setLength (0, 2, 5);
+	lxr_seq_select (0, 0, 0);
+	lxr_seq_set_shuffle (40);
+	lxr_seq_set_kit (1);
+	lxr_seq_select (1, 0, 0);
+	lxr_seq_set_kit (2);
+	mkdir (dir, 0755);
+	char path[4096];
+	uint8_t v3[LXR_SEQ_PATTERN_FILE], file[LXR_SEQ_PATTERN_FILE];
+	static const char *const names[3] = { "00-GROOVE.PAT", "01-FILL.PAT", "02-OLD.PAT" };
+	for (int pat = 0; pat < 3; pat++)
+	{
+		lxr_seq_project_get_pattern (lxr_seq_project_current (), (uint8_t) pat, v3);
+		const size_t n = patternVersion (v3, 3 - pat, pat == 0 ? "GROOVE" : pat == 1 ? "FILL" : "OLD", file);
+		snprintf (path, sizeof path, "%s/%s", dir, names[pat]);
+		writeFile (path, file, n);
+	}
+	snprintf (path, sizeof path, "%s/01-KITA.SND", dir);
+	writeFile (path, kitFile[1], LXR_SEQ_KIT_FILE);
+	snprintf (path, sizeof path, "%s/02-KITB.SND", dir);
+	writeFile (path, kitFile[2], LXR_SEQ_KIT_FILE);
+	snprintf (path, sizeof path, "%s/03-OLDKIT.SND", dir);
+	writeFile (path, kitFile[0], 255);
+	uint8_t song[LXR_SEQ_SONG_FILE] = "SONG";
+	memset (song + 8, LXR_SEQ_SONG_END, 64);
+	const uint8_t entries[] = { 0, 1, 2, 1, LXR_SEQ_SONG_LOOP };
+	memcpy (song + 8, entries, sizeof entries);
+	snprintf (path, sizeof path, "%s/00-SONG.SNG", dir);
+	writeFile (path, song, sizeof song);
+	uint8_t glo[31] = { 110 };
+	glo[29] = 1;	// PAR_PATTERN_MODE: auto (kits per pattern)
+	glo[30] = 1;
+	snprintf (path, sizeof path, "%s/GLO.CFG", dir);
+	writeFile (path, glo, sizeof glo);
+	snprintf (path, sizeof path, "%s/PRJ.NFO", dir);
+	writeFile (path, "TESTPRJ\0", 8);
+}
+
+// the engine with the project built from the files through the engine's
+// API (its own parser), started at 110 bpm
+typedef struct
+{
+	int songMode;
+	int pattern;
+} ConvRef;
+
+static void convRef (void *arg, th_output *out)
+{
+	const ConvRef *cr = arg;
+	lxr_engine_init ();
+	lxr_engine_set_split (LXR_SPLIT_KIT, 0);
+	lxr_project *p = lxr_seq_project_new ();
+	static const char *const pats[3] = { "00-GROOVE.PAT", "01-FILL.PAT", "02-OLD.PAT" };
+	static const char *const kits[3] = { "01-KITA.SND", "02-KITB.SND", "03-OLDKIT.SND" };
+	char path[4096];
+	size_t size = 0;
+	int ok = 1;
+	for (int i = 0; i < 3; i++)
+	{
+		snprintf (path, sizeof path, "%s/%s", projectDir, pats[i]);
+		uint8_t *d = readFile (path, &size);
+		ok = ok && d && lxr_seq_project_set_pattern (p, (uint8_t) i, d, size);
+		free (d);
+		snprintf (path, sizeof path, "%s/%s", projectDir, kits[i]);
+		d = readFile (path, &size);
+		ok = ok && d && lxr_seq_project_set_kit (p, (uint8_t) (i + 1), d, size);
+		free (d);
+	}
+	snprintf (path, sizeof path, "%s/00-SONG.SNG", projectDir);
+	uint8_t *d = readFile (path, &size);
+	lxr_seq_project_set_song (p, 0, d, size);
+	free (d);
+	lxr_seq_project_set_start (p, (uint8_t) cr->pattern, 0, cr->songMode);
+	lxr_seq_project_free (lxr_seq_project_install (p));	// kit autoload: the start pattern's kit
+	lxr_seq_set_tempo (110);
+	lxr_seq_start (0);
+	renderBlocks (out, 0, out->frames / BLOCK);
+	out->ok = ok;
+}
+
+typedef struct
+{
+	const PresetFile *pf;
+} ConvPlug;
+
+static void convPlugin (void *arg, th_output *out)
+{
+	const ConvPlug *cp = arg;
+	Plugin *p = pluginNew (44100);
+	for (int i = 0; i < cp->pf->n; i++)
+	{
+		const int c = th_control_index (cp->pf->symbol[i]);
+		if (c < EDS_NUM_CONTROLS)
+			p->controls[c] = cp->pf->value[i];
+		else
+			p->panel[c - EDS_NUM_CONTROLS] = cp->pf->value[i];
+	}
+	const int restored = pluginRestore (p, cp->pf->chunk, cp->pf->size);
+	for (int pos = 0; pos < out->frames; pos += 512)
+	{
+		if (pos == 0)
+		{
+			th_seq_position (events (p), sizeof p->seq, 0, 0, 1, 0, 0, 110);
+		}
+		pluginRun (p, 512, out, pos);
+	}
+	out->ok = restored;
+	pluginFree (p);
+}
+
+static void checkConvertedOne (const char *tool, const char *work, const char *bundleName, const char *args, int songMode,
+			       int pattern)
+{
+	char cmd[16384], bundle[4096];
+	snprintf (bundle, sizeof bundle, "%s/%s", work, bundleName);
+	snprintf (cmd, sizeof cmd, "%s '%s' -o '%s' %s > /dev/null", tool, projectDir, bundle, args);
+	CHECK (system (cmd) == 0, "%s failed", cmd);
+	char path[8192];
+	snprintf (path, sizeof path, "%s/testprj.ttl", bundle);
+	static PresetFile pf;
+	if (!parsePreset (path, &pf))
+	{
+		CHECK (0, "%s: no preset with a project", path);
+		return;
+	}
+	// the chunk as the engine reads and writes it again: the same bytes
+	lxr_engine_init ();
+	lxr_project *p = lxr_seq_project_new ();
+	const char *err = lxr_seq_chunk_read (p, pf.chunk, pf.size);
+	static uint8_t again[300000];
+	const size_t n = err ? 0 : lxr_seq_chunk_write (p, again, sizeof again);
+	lxr_seq_project_free (p);
+	CHECK (!err && n == pf.size && !memcmp (again, pf.chunk, n), "%s: the chunk (%zu bytes) read and written again: %s %zu bytes",
+	       bundleName, pf.size, err ? err : "", n);
+	snprintf (path, sizeof path, "%s/%s.chunk", work, bundleName);
+	writeFile (path, pf.chunk, pf.size);	// for the lilv check
+	// the preset's values: Host mode, the tempo, the start
+	int mode = -1, tempo = -1, start = -1;
+	for (int i = 0; i < pf.n; i++)
+	{
+		mode = !strcmp (pf.symbol[i], "seq_mode") ? (int) pf.value[i] : mode;
+		tempo = !strcmp (pf.symbol[i], "seq_tempo") ? (int) pf.value[i] : tempo;
+		start = !strcmp (pf.symbol[i], "seq_pattern") ? (int) pf.value[i] : start;
+	}
+	CHECK (mode == 1 && tempo == 110 && start == pattern, "%s: seq_mode %d, seq_tempo %d, seq_pattern %d", bundleName, mode, tempo,
+	       start);
+	// rendered: the plugin with the preset as the engine with the project
+	const int frames = 512 * 775;	// 9 s: patterns 0, 1, 2 at 110 bpm and back to 1
+	th_output *a = th_output_new (frames), *b = th_output_new (frames);
+	const ConvPlug cp = { &pf };
+	const ConvRef cr = { songMode, pattern };
+	th_fork (convPlugin, (void *) &cp, a, "converted preset");
+	th_fork (convRef, (void *) &cr, b, "converted reference");
+	CHECK (a->ok && b->ok && th_peak (a) > 0.05f, "%s: failed or silent", bundleName);
+	CHECK (th_identical (a, b), "%s: the preset doesn't play as the engine with the project (first difference at %d)", bundleName,
+	       th_first_difference (a, b));
+	if (a->ok && th_identical (a, b) && th_peak (a) > 0.05f && !err)
+	{
+		printf ("%s (%s): %zu bytes of state, read and written again the same; plays as the engine with the project "
+			"(%d pf values, bit exact)\n", bundleName, args[0] ? args : "the first pattern", pf.size, pf.n);
+	}
+	th_output_free (a);
+	th_output_free (b);
+	free (pf.chunk);
+}
+
 static void checkConverted (const char *tool, const char *work)
 {
-	(void) tool;
-	(void) work;
-	printf ("converted projects: not yet\n");
+	mkdir (work, 0755);
+	snprintf (projectDir, sizeof projectDir, "%s/PROJ01", work);
+	writeProject (projectDir);
+	checkConvertedOne (tool, work, "song.lv2", "--song 0", 1, 0);
+	checkConvertedOne (tool, work, "pattern.lv2", "", 0, 0);
+	checkConvertedOne (tool, work, "pattern1.lv2", "--pattern 1", 0, 1);
 }

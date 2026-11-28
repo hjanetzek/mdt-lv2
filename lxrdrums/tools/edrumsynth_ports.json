@@ -324,6 +324,7 @@
 		{ "symbol": "master_midi_mode", "index": 307, "name": "MIDI Mode", "group": "master", "type": "midi_mode", "param": null, "slot": null, "engines": ["drum", "snare", "cymbal", "hihat"], "min": 0, "max": 1, "offset": 0, "default": 0, "kind": "enum", "target": false, "kit": false },
 		{ "symbol": "master_lxr_cc", "index": 308, "name": "LXR CC", "group": "master", "type": "lxr_cc", "param": null, "slot": null, "engines": ["drum", "snare", "cymbal", "hihat"], "min": 0, "max": 1, "offset": 0, "default": 0, "kind": "toggle", "target": false, "kit": false }
 	],
+	"project": { "property": "https://github.com/hjanetzek/mdt-lv2/edrumsynth#project", "type": "atom:Chunk", "magic": "EDSQ", "version": 1, "header": 48, "pattern_file": 3663, "kit_file": 266, "song_file": 72, "no_kit": 64, "globals": [120, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1] },
 	"panel_ports": [
 		{ "symbol": "seq_mode", "index": 309, "name": "Seq Mode", "group": "seq_transport", "direction": "input", "kind": "enum", "min": 0, "max": 2, "default": 1 },
 		{ "symbol": "seq_play", "index": 310, "name": "Play", "group": "seq_transport", "direction": "input", "kind": "toggle", "min": 0, "max": 1, "default": 0 },

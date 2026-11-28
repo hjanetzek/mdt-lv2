@@ -12,6 +12,10 @@
   change events);
 - the snapshot's keys against zynthian-ui's zynthian_state_schema.py
   (ZYNTHIAN_UI, default ~/bastel/github/zynthian-ui; skipped without it);
+- tools/lxr2preset.py: the preset bundle (the project chunk's header,
+  masks, start, current kit; the port values), the start pattern / song,
+  its snapshot against the schema (the chunk's bytes and the rendering:
+  seq_test --project, ctest project_preset);
 - the zynseq JSON through the real libzynseq.so: setState, getState,
   compared (EDS_LIBZYNSEQ = the library, else zynthian-ui's build folders;
   skipped without it). The library is only loaded (in a child process): no
@@ -31,6 +35,7 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 TOOLS = os.path.join(HERE, "..", "tools")
 sys.path.insert(0, TOOLS)
 import lxrformat as lxr  # noqa: E402
+import lxr2preset  # noqa: E402
 import lxr2zynthian as conv  # noqa: E402
 import snd2lv2  # noqa: E402
 
@@ -639,6 +644,101 @@ class HybridTest(Base):
         with open(os.path.join(out, "000-TESTPROJ.zss")) as f:
             snap = json.load(f)
         self.assertEqual((snap["chains"]["1"]["midi_chan"], list(snap["chains"])), (9, ["1", "3", "0"]))
+
+
+# ---- lxr2preset.py ----
+
+class PresetTest(Base):
+    def setUp(self):
+        super().setUp()
+        self.proj.pattern(0, Pat("EMPTY"))
+        self.proj.pattern(1, Pat("A", kit=1).hit(0, 0).hit(3, 4, locks=[(9, 70)]))
+        self.proj.pattern(2, Pat("B", version=1).hit(1, 0))
+        self.proj.song(3, "S", [2, 1], end=lxr.SONG_LOOP)
+        self.out = os.path.join(self.tmp, "out")
+
+    def preset(self, **kw):
+        r = lxr2preset.convert(PORTS, self.proj.dir, out=os.path.join(self.out, "b.lv2"), **kw)
+        with open(os.path.join(r["bundle"], r["preset"]), encoding="utf-8") as f:
+            text = f.read()
+        values = {m.group(1): float(m.group(2))
+                  for m in __import__("re").finditer(r'lv2:symbol "([a-z0-9_]+)" ;\s*pset:value (-?[0-9.]+)', text)}
+        return r, text, values
+
+    def test_chunk(self):
+        r, text, values = self.preset()
+        c = r["chunk"]
+        self.assertEqual(c[:4], b"EDSQ")
+        self.assertEqual(int.from_bytes(c[4:6], "little"), 1)
+        pm, km, sm = (int.from_bytes(c[o:o + 8], "little") for o in (8, 16, 24))
+        self.assertEqual(pm, 0b111)        # pattern 0 without steps is kept (its name, its bytes)
+        self.assertEqual(km, 0b11)
+        self.assertEqual(sm, 1 << 3)
+        self.assertEqual((c[32], c[33], c[34]), (1, 0, 2))   # the first pattern with steps, no song mode, a kit
+        self.assertEqual(c[36:44], b"TESTPROJ")
+        self.assertEqual(len(c), 48 + 3 * 3663 + 2 * 266 + 72 + 31 + 266)
+        # GLO.CFG's pattern change mode 0: the start kit is kit 0
+        self.assertEqual(c[-266:-266 + 8], b"KITZERO\0")
+        self.assertIn('"^^xsd:base64Binary', text)
+        self.assertIn("<%s>" % PORTS["project"]["property"], text)
+        # V1 pattern 2 as V3: no timing (shift none), kit 0
+        o = 48 + 2 * 3663
+        self.assertEqual(c[o + 8:o + 14], b"PatV03")
+        self.assertEqual(c[o + 14 + 448:o + 14 + 512], bytes([0x70] * 64))
+        self.assertEqual(c[o + 3662], 0)
+
+    def test_values(self):
+        r, text, values = self.preset()
+        self.assertEqual((values["seq_mode"], values["seq_tempo"], values["seq_pattern"], values["seq_song_mode"]),
+                         (1, 133, 1, 0))
+        self.assertEqual(values["seq_kit_autoload"], 0)
+        kit = lxr.read_kit(os.path.join(self.proj.dir, "00-KITZE.SND"))
+        expected = snd2lv2.kit_values(PORTS, kit.params, kit.engines, lambda t: None)
+        for sym, v in expected.items():
+            self.assertEqual(values[sym], v, sym)
+        self.assertNotIn("seq_out_running", values)
+
+    def test_start(self):
+        r, _, values = self.preset(pattern=2)
+        self.assertEqual((r["chunk"][32], values["seq_pattern"]), (2, 2))
+        r, _, values = self.preset(song=3)
+        self.assertEqual((r["chunk"][32], r["chunk"][33], r["chunk"][34]), (2, 3, 3))
+        self.assertEqual((values["seq_song_mode"], values["seq_song"], values["seq_pattern"]), (1, 3, 2))
+        with self.assertRaises(lxr.FormatError):
+            self.preset(pattern=64)
+
+    def test_snapshot(self):
+        r = lxr2preset.convert(PORTS, self.proj.dir, out=os.path.join(self.out, "b.lv2"), name="My Proj",
+                               snapshot=self.out, prog=7)
+        self.assertTrue(r["snapshot"].endswith("007-My Proj.zss"))
+        with open(r["snapshot"], encoding="utf-8") as f:
+            snap = json.load(f)
+        proc = snap["zs3"]["zs3-0"]["processors"]["1"]
+        base = "file:///zynthian/zynthian-my-data/presets/lv2/b.lv2"
+        self.assertEqual(proc["preset_info"], [base + "/my_proj.ttl", None, "My Proj", base + "/manifest.ttl#bank1"])
+        self.assertEqual(proc["controllers"], {})
+        self.assertEqual(snap["chains"]["1"]["slots"], [{"1": "JV/eDrumSynth"}, {"2": "MI"}])
+        self.assertEqual(snap["zynseq"]["tempo"], 133.0)
+        schema = load_schema()
+        if schema is None:
+            return
+        for key in snap:
+            self.assertIn(key, schema)
+        for cid, chain in snap["chains"].items():
+            self.assertFalse(set(chain) - set(schema["chains"]["1"]), cid)
+        z, zref = snap["zs3"]["zs3-0"], schema["zs3"]["zs3-0"]
+        self.assertFalse(set(z) - set(zref))
+        for pid, p in z["processors"].items():
+            self.assertFalse(set(p) - set(zref["processors"]["1"]), pid)
+        self.assertFalse(set(snap["zynseq"]) - set(schema["zynseq"]))
+
+    def test_old_port_map(self):
+        old = {k: v for k, v in PORTS.items() if k != "project"}
+        path = os.path.join(self.tmp, "old.json")
+        with open(path, "w") as f:
+            json.dump(old, f)
+        with self.assertRaises(SystemExit):
+            lxr2preset.main([self.proj.dir, "--ports", path, "-o", os.path.join(self.out, "x.lv2")])
 
 
 # ---- zynthian_state_schema.py ----

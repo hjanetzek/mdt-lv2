@@ -504,6 +504,12 @@
 	lv2:name "Seq Step Read" ;
 	lv2:displayPriority 1 .
 
+<https://github.com/hjanetzek/mdt-lv2/edrumsynth#project>
+	a rdf:Property ;
+	rdfs:label "Project" ;
+	rdfs:comment "the sequencer's project: patterns, kits, songs and globals of an LXR project (engine/Synth_LXR/src/lxr_sequencer.c: the layout), saved and restored with the plugin's state" ;
+	rdfs:range atom:Chunk .
+
 <https://github.com/hjanetzek/mdt-lv2/edrumsynth>
 	a lv2:Plugin , lv2:InstrumentPlugin , doap:Project ;
 	doap:name "eDrumSynth" ;
