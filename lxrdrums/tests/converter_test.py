@@ -22,6 +22,7 @@
   init(), no JACK client.
 """
 import ast
+import base64
 import json
 import os
 import shutil
@@ -721,6 +722,35 @@ class PresetTest(Base):
         base = "file:///zynthian/zynthian-my-data/presets/lv2/b.lv2"
         self.assertEqual(proc["preset_info"], [base + "/my_proj.ttl", None, "My Proj", base + "/manifest.ttl#bank1"])
         self.assertEqual(proc["controllers"], {})
+        # the project embedded as zynthian's plugin state (zynthian-ui
+        # docs/snapshot-plugin-state.md): state.ttl = the preset with itself
+        # as subject, no bank, relative URIs only
+        st = proc["lv2_state"]
+        self.assertEqual(st["plugin"], PORTS["uri"])
+        self.assertEqual(sorted(st["files"]), ["manifest.ttl", "state.ttl"])
+        text = st["files"]["state.ttl"]
+        self.assertIn("<state.ttl>\n\ta pset:Preset ;", text)
+        self.assertNotIn("pset:bank", text)
+        self.assertNotIn("file:", text)
+        self.assertIn(base64.b64encode(r["chunk"]).decode(), text)
+        self.assertIn("<state.ttl>", st["files"]["manifest.ttl"])
+        for p in PORTS["panel_ports"]:
+            if p["direction"] == "input" and not p.get("saved", True):
+                self.assertNotIn('"%s"' % p["symbol"], text)
+        # loaded with lilv as zynthian's jalv does (load state DIR), when
+        # ctest gives the test program and the plugin's bundle
+        tool, plugin = os.environ.get("EDS_LILV_PRESET"), os.environ.get("EDS_BUNDLE")
+        if tool and plugin:
+            sdir = os.path.join(self.out, "state")
+            os.makedirs(sdir, exist_ok=True)
+            for name, data in st["files"].items():
+                with open(os.path.join(sdir, name), "w", encoding="utf-8") as f:
+                    f.write(data)
+            with open(os.path.join(sdir, "expected.chunk"), "wb") as f:
+                f.write(r["chunk"])
+            res = subprocess.run([tool, plugin, os.path.join(sdir, "state.ttl"), os.path.join(sdir, "expected.chunk")],
+                                 capture_output=True, text=True)
+            self.assertEqual(res.returncode, 0, res.stdout + res.stderr)
         self.assertEqual(snap["chains"]["1"]["slots"], [{"1": "JV/eDrumSynth"}, {"2": "MI"}])
         self.assertEqual(snap["zynseq"]["tempo"], 133.0)
         schema = load_schema()
@@ -733,7 +763,8 @@ class PresetTest(Base):
         z, zref = snap["zs3"]["zs3-0"], schema["zs3"]["zs3-0"]
         self.assertFalse(set(z) - set(zref))
         for pid, p in z["processors"].items():
-            self.assertFalse(set(p) - set(zref["processors"]["1"]), pid)
+            # lv2_state: zynthian-ui's plugin-state branch, not in the schema yet
+            self.assertFalse(set(p) - set(zref["processors"]["1"]) - {"lv2_state"}, pid)
         self.assertFalse(set(snap["zynseq"]) - set(schema["zynseq"]))
 
     def test_old_port_map(self):

@@ -217,6 +217,11 @@ if (EDS_TESTS AND NOT CMAKE_CROSSCOMPILING)
 			add_test (NAME lilv_preset COMMAND lilv_preset ${BUNDLE_DIR} ${PROJECT_WORK}/song.lv2/testprj.ttl
 				${PROJECT_WORK}/song.lv2.chunk)
 			set_tests_properties (lilv_preset PROPERTIES FIXTURES_REQUIRED converted_project)
+			# the converter test loads a snapshot's embedded state with it
+			if (TEST converter)
+				set_tests_properties (converter PROPERTIES ENVIRONMENT
+					"EDS_LILV_PRESET=$<TARGET_FILE:lilv_preset>;EDS_BUNDLE=${BUNDLE_DIR}")
+			endif ()
 		endif ()
 	endif ()
 

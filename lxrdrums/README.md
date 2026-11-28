@@ -355,7 +355,10 @@ songs end or loop. Plan and notes: [SEQUENCER_PLAN.md](SEQUENCER_PLAN.md)
 - **State**: `save preset` stores the project (one chunk: the LXR's
   pattern, kit and song files in a container); a preset with a project
   replaces it at the next block, also while playing. 0.2.0 presets keep the
-  project. Zynthian snapshots store a preset reference, not the state.
+  project. Zynthian stores the state in snapshots with zynthian-ui's
+  plugin state support (branch `plugin-state`, `docs/snapshot-plugin-state.md`:
+  embedded as `lv2_state`, loaded after the preset); without it, snapshots
+  keep only a preset reference.
 - CPU: as 0.2.0 within the noise; playing, +0.1-0.5 % (desktop).
 
 ## LXR projects as presets
@@ -380,7 +383,12 @@ Default start: the first pattern with steps; `--song N`: song mode with
 song N. The start kit: the start pattern's kit, else kit 0, else the init
 kit. `--snapshot`: a Zynthian snapshot with one eDrumSynth chain (MIDI
 channel 10) loading the preset, at the project's tempo; start Zynthian's
-transport to play. A real LXR project is about 240 KB of state.
+transport to play. The snapshot also embeds the project as Zynthian's
+plugin state (`lv2_state` in zs3-0's processor: `state.ttl`, the preset with
+itself as subject, and a `manifest.ttl`; zynthian-ui's
+`docs/snapshot-plugin-state.md`), so with Zynthian's plugin state support it
+plays without the bundle installed; older Zynthians use the preset
+reference. A real LXR project is about 240 KB of state.
 
 ## Audio
 
