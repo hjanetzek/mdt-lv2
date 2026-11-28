@@ -39,6 +39,7 @@ import os
 import re
 import sys
 
+sys.dont_write_bytecode = True     # no __pycache__ next to the tools
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
 import lxrformat as lxr  # noqa: E402

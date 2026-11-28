@@ -1,12 +1,13 @@
 # Contributor: Hannes Janetzek <hannes.janetzek@gmail.com>
 # DRAFT for nura-builds aports/lv2/edrumsynth-lv2/APKBUILD (not there yet).
 # eDrumSynth: MicroDexed-touch's drum engine (the voices of the OpenElixir-02
-# firmware) as an LV2 instrument; Zynthian engine key "JV/eDrumSynth".
+# firmware) as an LV2 instrument with the LXR's step sequencer (0.3.0);
+# Zynthian engine key "JV/eDrumSynth".
 # Source: a local tarball from lv2/lxrdrums/tools/mktarball.sh, copied next
 # to this file, until lv2/ is published; then a download of its archive at a
 # commit (_commit, as artyfx-lv2). No ARM flags here: they come from the build.
 pkgname=edrumsynth-lv2
-pkgver=0.2.0
+pkgver=0.3.0
 pkgrel=0
 pkgdesc="eDrumSynth: synthesized drums (MicroDexed-touch's drum engine) as an LV2 instrument"
 url="https://github.com/hjanetzek/mdt-lv2"
@@ -24,8 +25,9 @@ build() {
 }
 
 check() {
-	# the generator, render and resampler tests; the TTL validators
-	# (lv2lint, sord_validate, lv2_validate) run only where installed
+	# the generator, render, sequencer and resampler tests; the TTL
+	# validators (lv2lint, sord_validate, lv2_validate), the Python tools'
+	# and the lilv preset test run only where installed
 	ctest --test-dir build --output-on-failure
 }
 
@@ -34,5 +36,5 @@ package() {
 }
 # from tools/mktarball.sh (or abuild checksum)
 sha512sums="
-00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000  edrumsynth-0.2.0.tar.gz
+00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000  edrumsynth-0.3.0.tar.gz
 "

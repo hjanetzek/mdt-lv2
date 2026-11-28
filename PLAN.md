@@ -5,7 +5,7 @@ postmarketOS / nura armv7 (Cortex-A7, the Galaxy S III Neo), built by nura's
 CI for armv7, aarch64 and x86_64. Each plugin is a directory here with its
 own plan; this file is the roadmap and the conventions they share.
 
-Status (2026-11-26):
+Status (2026-11-28):
 - `lxrdrums/`: **eDrumSynth** (the LXR drum engine). Done: desktop tests,
   armv7 package, phone benchmark (12 % of a Cortex-A7 core at 48 kHz),
   published by nura's CI for armv7, aarch64 and x86_64
@@ -24,6 +24,12 @@ Status (2026-11-26):
   track chains only for melodic / polyrhythmic tracks, for Zynthian's pad
   view; `CONVERTER_PLAN.md` §9), desktop-tested 2026-11-26; no plugin
   change.
+  0.3.0 (desktop-tested 2026-11-28): the LXR's own step sequencer
+  (OpenElixir-02's, in the engine copy) in the plugin, following the
+  host's transport, the project as LV2 state, 109 panel ports (`seq_*`)
+  for a widget, `tools/lxr2preset.py` (LXR projects as presets the plugin
+  plays). Plan and notes: `lxrdrums/SEQUENCER_PLAN.md`. Next: armv7
+  package, phone, the plugin-widgets widget.
 - `va/`: **mTrio** and **mAnalog** (MDT's Trio and Analog synths, §4.1).
   Done: desktop build and tests (bit exact against MDT at 44.1 kHz, engine
   at the host rate, no resampler), presets, draft APKBUILD (`mdt-va-lv2`).

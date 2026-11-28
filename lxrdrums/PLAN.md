@@ -10,7 +10,8 @@ same pattern (§10).
 
 Status: steps 1-4 implemented (2026-11-22; notes: §11). Implementation: §9.
 v2 (0.1.0, §13) implemented on the desktop 2026-11-25 (notes: §14); armv7
-build and phone check open.
+build and phone check open. 0.2.0: §15. 0.3.0 (the LXR's sequencer in the
+plugin, desktop-tested 2026-11-28): `SEQUENCER_PLAN.md`.
 
 ## 1. Facts this plan rests on
 
@@ -604,3 +605,10 @@ project converter's parameter locks (`CONVERTER_PLAN.md`, its §8 has the
 implementation notes). Port 308 after the others, symbol frozen; tests in
 the render test (bit exact against the engine driven directly).
 
+
+## 16. 0.3.0 (2026-11-28): the LXR's sequencer
+
+OpenElixir-02's step sequencer in the engine copy and the plugin (Host /
+Internal clock, the project as LV2 state, the panel ports, the project to
+preset tool): `SEQUENCER_PLAN.md` (§9 the ports, §10 the implementation
+notes). The engine copy's `LV2:` changes: `engine/Synth_LXR/ORIGIN.md`.

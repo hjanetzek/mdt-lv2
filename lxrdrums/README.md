@@ -1,9 +1,12 @@
 # eDrumSynth
 
-Version 0.2.0 (v2.1: the "LXR CC" switch; v2: engines per voice slot, MIDI
-modes, kit presets and the kit converter; changes: [Changes in
-0.2.0](#changes-in-020), [Changes in 0.1.0](#changes-in-010)). The LXR
-project converter (patterns, songs and kits as a Zynthian snapshot):
+Version 0.3.0 (the LXR's own step sequencer in the plugin; v2.1: the "LXR
+CC" switch; v2: engines per voice slot, MIDI modes, kit presets and the kit
+converter; changes: [Changes in 0.3.0](#changes-in-030), [Changes in
+0.2.0](#changes-in-020), [Changes in 0.1.0](#changes-in-010)). The
+sequencer, its panel ports and its state: [The sequencer](#the-sequencer);
+LXR projects as presets the plugin plays: [LXR projects as
+presets](#lxr-projects-as-presets); as Zynthian snapshots (zynseq):
 [LXR projects as Zynthian snapshots](#lxr-projects-as-zynthian-snapshots).
 
 Synthesized drums as an LV2 instrument: MicroDexed-touch's drum engine (the
@@ -23,9 +26,13 @@ widgets on the amp EG and filter pages; desktop hosts show their generic UIs.
   cymbal, hi-hat; default: the stock ones). The LXR's init kit, the FX bus
   (distortion, ring modulator, compressor, delay), the DJ filter and the
   limiter. Factory presets, and a converter for LXR / MDT `.snd` kits.
-- One MIDI input (atom), one stereo output. One instance per process (the
-  engine is global state; jalv / Zynthian run one plugin per process): a
-  second instance in the same process is refused.
+- The LXR's step sequencer (OpenElixir-02's): patterns with parameter
+  locks, flams, shift, probabilities, track lengths, shuffle, a kit per
+  pattern, songs; it follows the host's transport (Zynthian's), edited
+  through the Seq controls; the project is the plugin's LV2 state.
+- One MIDI input (atom, with the host's transport), one stereo output. One
+  instance per process (the engine is global state; jalv / Zynthian run one
+  plugin per process): a second instance in the same process is refused.
 - The plan and its decisions: [PLAN.md](PLAN.md).
 
 ## MIDI: the General MIDI drum map, Kit and Multi mode
@@ -110,8 +117,11 @@ controls per page ("Bass Drum LFO 1", "Bass Drum LFO 2"):
 | Master: DJ filter, DJ resonance, limiter, sample rate (all voices), MIDI mode, LXR CC | 6 | 2 |
 
 The voices in track order (bass drum, tom 1, tom 2, snare, cymbal, hi-hat),
-each 14 pages, then FX Bus and Master: 68 groups, 89 pages. The list:
-`build/gen_ttl --pages`.
+each 14 pages, then FX Bus and Master: 68 groups, 89 pages. Then the
+sequencer's panel (0.3.0, ports 309..417): 9 input groups (Seq Transport,
+Pattern, Select, Step, Step Locks, Track, Mutes, Step Buttons, Actions: 54
+controls, 15 pages) and 4 output groups (55 monitors). The list:
+`build/gen_ttl --pages`; the panel: [SEQUENCER_PLAN.md §9](SEQUENCER_PLAN.md).
 
 ### Engines per voice
 
@@ -309,6 +319,68 @@ the ZS3 at every loop). `--one` puts several projects into one snapshot
 printed. What isn't converted and why, and the factory projects' counts:
 `CONVERTER_PLAN.md` §8.
 
+## The sequencer
+
+The LXR-02's sequencer (OpenElixir-02's `sequencer.c`, copied into
+`engine/Synth_LXR/lxr/`, built by `engine/Synth_LXR/src/lxr_sequencer.c`)
+plays a project of 64 patterns (7 tracks x 64 steps: velocity, note,
+probability, two parameter locks, flam, shift; track lengths, shuffle, a
+kit), 64 kits and 64 songs, as the LXR does: locks return to the kit's
+value at the track's next step, a pattern switch happens at the end of the
+playing pattern, a pattern loads its kit when it starts (kit autoload),
+songs end or loop. Plan and notes: [SEQUENCER_PLAN.md](SEQUENCER_PLAN.md)
+(§9: the ports, §10: how it works).
+
+- **Clock** (`seq_mode`): Host (default): the host's transport
+  (`time:Position`: Zynthian's / JACK's start, stop, locate, tempo); a
+  start inside the song begins where the song would be. Internal:
+  `seq_play` and `seq_tempo`. Off: MIDI only (0.2.0).
+- **Timing**: the LXR's 96 PPQ clock, a tick per engine block at most:
+  steps play at the first engine block at or after their time (0-1.45 ms
+  late), measured where the block is heard (the resampler's delay
+  compensated); bit exact against the engine's sequencer at 44.1 kHz.
+- **Panel** (the Seq groups, 15 Zynthian pages; outputs for a widget): the
+  pattern to play, song mode and song, kit autoload; the edited pattern,
+  track, page and step; 16 step buttons; the step's velocity, note,
+  probability, flam, shift and two locks; the track's length and the
+  Euclid generator; mutes; the pattern's kit, store kit, clear, copy /
+  paste. Outputs: running, playing / next pattern, song position, tempo,
+  trigger flashes, mutes, each track's step, the page's steps of every
+  track and the velocities, the selected step's fields. Edits apply when
+  a control's value changes; triggers on a rise (send 0, then 1).
+- **Kits and the controls**: a kit the sequencer loads (or a restored
+  state's) is the sound until a control changes; a changed control sets
+  its parameter; the engine selectors work as in 0.2.0.
+- **State**: `save preset` stores the project (one chunk: the LXR's
+  pattern, kit and song files in a container); a preset with a project
+  replaces it at the next block, also while playing. 0.2.0 presets keep the
+  project. Zynthian snapshots store a preset reference, not the state.
+- CPU: as 0.2.0 within the noise; playing, +0.1-0.5 % (desktop).
+
+## LXR projects as presets
+
+`tools/lxr2preset.py` (Python 3, no dependencies) turns an LXR-02 /
+OpenElixir-02 project folder into a presets bundle with one preset whose
+state is the whole project (every pattern, kit and song) and whose control
+values are the start kit and the sequencer's settings (Host mode, the
+project's tempo for Internal mode, the start pattern or song):
+
+```
+tools/lxr2preset.py PROJDIR [-o BUNDLE] [--name NAME] [--pattern N | --song N]
+                    [--snapshot DIR [--prog NNN] [--presets-dir PATH]] [-v]
+
+tools/lxr2preset.py /path/to/PROJ01 --snapshot out --prog 101
+# eDrumSynth-Easy-Yo.project.lv2, out/101-Easy Yo.zss
+scp -r eDrumSynth-Easy-Yo.project.lv2 root@zynthian:/zynthian/zynthian-my-data/presets/lv2/
+scp "out/101-Easy Yo.zss" root@zynthian:/zynthian/zynthian-my-data/snapshots/000/
+```
+
+Default start: the first pattern with steps; `--song N`: song mode with
+song N. The start kit: the start pattern's kit, else kit 0, else the init
+kit. `--snapshot`: a Zynthian snapshot with one eDrumSynth chain (MIDI
+channel 10) loading the preset, at the project's tempo; start Zynthian's
+transport to play. A real LXR project is about 240 KB of state.
+
 ## Audio
 
 The engine renders 64-frame blocks of 16 bit stereo at a fixed 44.1 kHz
@@ -391,6 +463,19 @@ Tests (`ctest`; the validators are skipped when not installed):
   `libzynseq.so` (`setState`, `getState`, compared; `EDS_LIBZYNSEQ` or
   zynthian-ui's build folders; the library is loaded in a child process
   without `init()`, so no JACK client), each skipped when not there.
+- `sequencer` (`tests/seq_test.c`): the ported sequencer on the engine
+  against the trigger blocks the LXR's timing gives (steps, flams, shift,
+  probability, polymeter, shuffle, mutes, pattern switch, songs, locate),
+  locks and kits per pattern; the plugin bit exact against the engine's
+  sequencer driven the same way (host transport: start, tempo change,
+  locate, stop, MIDI alongside; Internal; Off; a restore while running),
+  48 kHz onsets, the panel ports, the state round trip, the kit controls'
+  rules; CPU with the sequencer playing.
+- `project_preset` (with Python 3): synthetic LXR projects converted by
+  `tools/lxr2preset.py`: the chunk is the engine's, the preset plays bit
+  exact as the engine with the project read from the files;
+  `sord_validate_project`; `lilv_preset` (with lilv): the preset restored
+  through lilv as jalv does.
 - `resampler`: sines through the resampler (44.1 -> 48, 47.999, 96, 32
   kHz): gain, phase, and the rest (aliasing, images, noise) below -80 dB.
 
@@ -402,6 +487,21 @@ The tests don't run jalv or anything that creates a JACK client.
 `edrumsynth-VERSION.tar.gz` (HEAD, or the working tree; `lxrdrums/` and
 `common/`) and its sha512sum line; `packaging/APKBUILD` is the draft recipe for nura-builds
 (`aports/lv2/edrumsynth-lv2/`, `arch="all"`, CMake, ctest in `check()`).
+
+## Changes in 0.3.0
+
+- The LXR's sequencer (OpenElixir-02's, `engine/Synth_LXR/ORIGIN.md`):
+  ticked before each engine block, following the host's transport or its
+  own tempo; MIDI as before.
+- 109 panel controls (`seq_*`, indices 309-417: 54 inputs, 55 outputs)
+  after the others: the existing indices and symbols are unchanged; the
+  port map has `panel_ports` and `project`.
+- LV2 State (`state:interface`): the project as one chunk.
+- A kit the sequencer loads or a restored state's is the sound until a
+  control changes (the controls act when they change; without the
+  sequencer as in 0.2.0).
+- `tools/lxr2preset.py`: LXR projects as presets (and snapshots) the
+  plugin plays.
 
 ## Changes in 0.2.0
 
@@ -434,6 +534,8 @@ The tests don't run jalv or anything that creates a JACK client.
 
 - Kit morph (a second kit as LV2 state), the LO / HI outputs, a note map
   control.
+- The sequencer's patch properties (`SEQUENCER_PLAN.md` §6), saving its
+  project with Zynthian snapshots.
 - FX param 1-4 names (one meaning per FX type, static ports).
 - Zynthian enabling: an `engine_config.json` default (`"JV/eDrumSynth"`,
   `ENABLED`, `CAT: "Percussion"`).
